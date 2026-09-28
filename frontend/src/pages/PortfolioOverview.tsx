@@ -67,11 +67,9 @@ export default function PortfolioOverview() {
                 <h3 className="font-semibold">Renda fixa</h3>
                 <span aria-hidden="true">→</span>
               </div>
-              <p className="mt-3 text-xl font-semibold tabular-nums">
-                {incomplete ? "Estimativa pendente" : brl(fixed.net)}
-              </p>
+              <p className="mt-3 text-xl font-semibold tabular-nums">{brl(fixed.amount)}</p>
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {brl(fixed.amount)} aplicados · valor líquido estimado
+                Valor aplicado
               </p>
             </Card>
           </Link>

@@ -118,9 +118,6 @@ export function PositionCard({
         <p className="text-2xl font-semibold tabular-nums">
           {brl(p.amount)}
         </p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          Valor aplicado
-        </p>
         {inv.applied_at && (
           <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
             Aplicado em {fmtDate(inv.applied_at)}
