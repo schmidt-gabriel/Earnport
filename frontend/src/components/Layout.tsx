@@ -19,9 +19,10 @@ const navAnnual = [
 ];
 
 // Pessoa Física: a separate app sharing the same DB (collections suffixed
-// `_invest`). It has no month/year filter, so its nav is a single list.
+// `_invest`). It has no month/year filter.
 const navPF = [
-  { to: "/pf", label: "Investimentos", end: true, newTo: "/pf?new=1" },
+  { to: "/pf", label: "Renda fixa", end: true, newTo: "/pf?new=1" },
+  { to: "/pf/fiis", label: "FIIs", end: true, newTo: "/pf/fiis?new=1" },
 ];
 
 type NavItem = { to: string; label: string; end?: boolean; newTo?: string };

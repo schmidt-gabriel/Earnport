@@ -5,50 +5,69 @@ import {
   DEFAULT_CDI,
   kindLabel,
   liquidityLabel,
+  rateLabel,
+  indexerOf,
   type Position,
 } from "../lib/invest";
 import { fmtDate, pct } from "../lib/pb";
 import { Button, Card } from "./ui";
 
-// Shared pieces of the Pessoa Física module: the CDI (persisted in the
-// `settings_invest` singleton) and the card each position is rendered as.
+// Shared pieces of the Pessoa Física module: reference rates persisted in
+// `settings_invest` and the card each position is rendered as.
 
 type InvestSettings = {
   id: string;
   cdi_rate?: number;
+  ipca_rate?: number;
+  ipca_rate_set?: boolean;
 };
 
 /**
- * O CDI, mantido em estado local e escrito de volta em `settings_invest` com um
- * debounce, já que ele é editado num input.
+ * CDI and optional IPCA estimate, saved in `settings_invest` when the
+ * investment modal is submitted.
  */
-export function useCdi() {
+export function useRates() {
   const { list, create, update } = useCollection<InvestSettings>("settings_invest", {
     // singleton: no `created` field, so the default -created sort would 400.
     sort: "-updated",
   });
   const record = list.data?.[0];
-  const [cdi, setCdi] = useState<number | null>(null);
+  const [rates, setRates] = useState<{ cdi: number; ipca: number | null } | null>(null);
 
   // Adopt the stored value once, when it arrives.
   useEffect(() => {
-    if (cdi !== null || !list.isSuccess) return;
-    setCdi(record?.cdi_rate ?? DEFAULT_CDI);
-  }, [list.isSuccess, record, cdi]);
+    if (rates !== null || !list.isSuccess) return;
+    setRates({
+      cdi: record?.cdi_rate ?? DEFAULT_CDI,
+      ipca: record?.ipca_rate_set ? (record.ipca_rate ?? 0) : null,
+    });
+  }, [list.isSuccess, record, rates]);
 
-  useEffect(() => {
-    if (cdi === null || !list.isSuccess) return;
-    if (record && record.cdi_rate === cdi) return;
-    const timer = setTimeout(() => {
-      if (record) update.mutate({ id: record.id, data: { cdi_rate: cdi } });
-      else create.mutate({ cdi_rate: cdi });
-    }, 700);
-    return () => clearTimeout(timer);
-    // The mutations are stable enough for this; re-running on them would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cdi, record, list.isSuccess]);
+  async function saveReference(indexer: "cdi" | "ipca", value: number | null) {
+    const current = record ?? (await list.refetch()).data?.[0];
+    const previous = rates ?? {
+      cdi: current?.cdi_rate ?? DEFAULT_CDI,
+      ipca: current?.ipca_rate_set ? (current.ipca_rate ?? 0) : null,
+    };
+    const next = indexer === "cdi"
+      ? { ...previous, cdi: value as number }
+      : { ...previous, ipca: value };
+    if (next.cdi === previous.cdi && next.ipca === previous.ipca) return;
+    const data = {
+      cdi_rate: next.cdi,
+      ipca_rate: next.ipca ?? 0,
+      ipca_rate_set: next.ipca !== null,
+    };
+    if (current) await update.mutateAsync({ id: current.id, data });
+    else await create.mutateAsync(data);
+    setRates(next);
+  }
 
-  return { cdi: cdi ?? DEFAULT_CDI, setCdi, ready: cdi !== null };
+  return {
+    cdi: rates?.cdi ?? DEFAULT_CDI,
+    ipca: rates?.ipca ?? null,
+    saveReference,
+  };
 }
 
 function Badge({
@@ -72,9 +91,8 @@ function Badge({
 }
 
 /**
- * Uma posição real: o destaque é **quanto tenho hoje**, líquido, ou seja o que
- * cairia na conta num resgate agora (o IR já descontado pela faixa dos dias
- * corridos desde a aplicação). O vencimento vem como linha secundária.
+ * A real position with an estimated current value after the applicable IR.
+ * A maturity-only investment is not available for redemption today.
  */
 export function PositionCard({
   position: p,
@@ -95,15 +113,20 @@ export function PositionCard({
       </div>
 
       <div className="mt-4 space-y-1">
-        <p className="text-2xl font-semibold tabular-nums">{brl(p.today.net)}</p>
+        <p className="text-2xl font-semibold tabular-nums">
+          {p.today ? brl(p.today.net) : "Sem estimativa"}
+        </p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          {inv.liquidity === "maturity" ? "Valor estimado hoje" : "Valor líquido estimado hoje"}
+        </p>
         <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
           {brl(p.amount)} aplicados
           {inv.applied_at && ` em ${fmtDate(inv.applied_at)}`}
         </p>
         {/* A taxa contratada, como ela foi digitada no formulário. */}
         <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-          {inv.cdi_pct.toLocaleString("pt-BR")}% do CDI
-          {p.today.taxRate > 0 && ` · IR ${pct(p.today.taxRate * 100)}%`}
+          {rateLabel(inv)}
+          {p.today && p.today.taxRate > 0 && ` · IR ${pct(p.today.taxRate * 100)}%`}
         </p>
         {p.atMaturity && !p.matured && (
           <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
@@ -114,9 +137,14 @@ export function PositionCard({
 
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
         <Badge>{liquidityLabel(inv.liquidity)}</Badge>
+        {indexerOf(inv) === "ipca" && !p.today && <Badge tone="warn">Informe IPCA estimado</Badge>}
         {inv.maturity && <Badge>Vence {fmtDate(inv.maturity)}</Badge>}
         {p.matured && <Badge tone="warn">Vencido</Badge>}
-        {p.pending && <Badge tone="warn">Sem data de aplicação</Badge>}
+        {p.pending && (
+          <Badge tone="warn">
+            {inv.applied_at ? "Aplicação futura" : "Sem data de aplicação"}
+          </Badge>
+        )}
       </div>
 
       {actions && (

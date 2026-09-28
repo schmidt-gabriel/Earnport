@@ -2,33 +2,34 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../lib/useCollection";
 import { brl, fromDateInput, toDateInput } from "../lib/pb";
-import { portfolioTotals, positions, type Investment } from "../lib/invest";
-import { NoInvestments, PositionCard, useCdi } from "../components/invest";
+import { contractedRateOf, indexerOf, portfolioTotals, positions, type Investment } from "../lib/invest";
+import { NoInvestments, PositionCard, useRates } from "../components/invest";
 import { Button, Field, Input, Modal, Select } from "../components/ui";
 
 const empty = {
   name: "",
   broker: "",
   kind: "cdb",
-  cdi_pct: "100",
+  indexer: "cdi",
+  rate_pct: "100",
   amount: "",
   applied_at: "",
   liquidity: "maturity",
   maturity: "",
+  cdi_rate: "",
+  ipca_rate: "",
 };
 
 // A carteira: os títulos que foram comprados, cada um com o que foi aplicado e
-// quando. O card responde "quanto tenho hoje" (líquido, IR já descontado pela
-// faixa dos dias corridos). Todo campo de entrada de um título mora no modal;
-// o CDI, que vale para a carteira toda, é o único que fica no cabeçalho.
+// quando. O card mostra uma estimativa líquida, com IR pela faixa dos dias
+// corridos. Todos os campos de entrada, incluindo as referências CDI/IPCA,
+// ficam no modal.
 export default function Investments() {
   const { list, create, update, remove } = useCollection<Investment>(
     "investments_invest",
     { sort: "name" },
   );
-  // O CDI vale para a carteira toda (é o indexador de todo título), então é o
-  // único parâmetro global: mora no cabeçalho e é guardado em settings_invest.
-  const { cdi, setCdi } = useCdi();
+  const { cdi, ipca, saveReference } = useRates();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Investment | null>(null);
   const [form, setForm] = useState<Record<string, string>>(empty);
@@ -45,7 +46,7 @@ export default function Investments() {
 
   function openNew() {
     setEditing(null);
-    setForm(empty);
+    setForm({ ...empty, cdi_rate: String(cdi), ipca_rate: ipca === null ? "" : String(ipca) });
     setOpen(true);
   }
 
@@ -55,11 +56,14 @@ export default function Investments() {
       name: inv.name,
       broker: inv.broker ?? "",
       kind: inv.kind,
-      cdi_pct: String(inv.cdi_pct),
+      indexer: indexerOf(inv),
+      rate_pct: String(contractedRateOf(inv)),
       amount: inv.amount ? String(inv.amount) : "",
       applied_at: toDateInput(inv.applied_at),
       liquidity: inv.liquidity ?? "maturity",
       maturity: toDateInput(inv.maturity),
+      cdi_rate: String(cdi),
+      ipca_rate: ipca === null ? "" : String(ipca),
     });
     setOpen(true);
   }
@@ -70,7 +74,10 @@ export default function Investments() {
       name: form.name,
       broker: form.broker,
       kind: form.kind,
-      cdi_pct: Number(form.cdi_pct),
+      indexer: form.indexer,
+      rate_pct: Number(form.rate_pct),
+      // Retained only for importing old backups that still contain cdi_pct.
+      cdi_pct: form.indexer === "cdi" ? Number(form.rate_pct) : 0,
       amount: form.amount ? Number(form.amount) : 0,
       applied_at: form.applied_at ? fromDateInput(form.applied_at) : "",
       liquidity: form.liquidity,
@@ -78,10 +85,14 @@ export default function Investments() {
     };
     if (editing) await update.mutateAsync({ id: editing.id, data });
     else await create.mutateAsync(data);
+    if (form.indexer === "cdi") await saveReference("cdi", Number(form.cdi_rate));
+    if (form.indexer === "ipca") {
+      await saveReference("ipca", form.ipca_rate === "" ? null : Number(form.ipca_rate));
+    }
     setOpen(false);
   }
 
-  const carteira = positions(list.data ?? [], cdi);
+  const carteira = positions(list.data ?? [], cdi, ipca);
   const total = portfolioTotals(carteira);
   // Corretoras já usadas, para sugerir no formulário.
   const brokers = [
@@ -90,33 +101,21 @@ export default function Investments() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Investimentos</h1>
+          <h1 className="text-2xl font-semibold">Renda fixa</h1>
           {/* A carteira em uma linha. */}
           <p className="mt-1 text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
-            {brl(total.net)} hoje · {brl(total.amount)} aplicados ·{" "}
-            <span className="text-emerald-600 dark:text-emerald-400">
-              + {brl(total.netGain)}
-            </span>
+            {total.incomplete ? "Estimativa pendente · " : `${brl(total.net)} hoje · `}
+            {brl(total.amount)} aplicados
+            {!total.incomplete && (
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {" · + "}{brl(total.netGain)}
+              </span>
+            )}
           </p>
         </div>
-        {/* O CDI ao lado do botão: um parâmetro só, editado onde é lido. */}
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
-            CDI (% a.a.)
-            <span className="w-24">
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                value={cdi}
-                onChange={(e) => setCdi(Number(e.target.value))}
-              />
-            </span>
-          </label>
-          <Button onClick={openNew}>+ Adicionar</Button>
-        </div>
+        <Button onClick={openNew}>+ Adicionar</Button>
       </div>
 
       {carteira.length === 0 ? (
@@ -178,16 +177,50 @@ export default function Investments() {
                 <option value="lci_lca">LCI/LCA (isento)</option>
               </Select>
             </Field>
-            <Field label="Taxa (% do CDI)">
+            <Field label="Indexador">
+              <Select
+                value={form.indexer}
+                onChange={(e) => setForm({ ...form, indexer: e.target.value, rate_pct: "" })}
+              >
+                <option value="cdi">CDI</option>
+                <option value="ipca">IPCA + taxa</option>
+                <option value="fixed">Prefixado</option>
+              </Select>
+            </Field>
+            <Field label={form.indexer === "cdi" ? "Taxa (% do CDI)" : form.indexer === "ipca" ? "Taxa adicional (% a.a.)" : "Taxa fixa (% a.a.)"}>
               <Input
                 type="number"
                 step="0.01"
                 min={0}
                 required
-                value={form.cdi_pct}
-                onChange={(e) => setForm({ ...form, cdi_pct: e.target.value })}
+                value={form.rate_pct}
+                onChange={(e) => setForm({ ...form, rate_pct: e.target.value })}
               />
             </Field>
+            {form.indexer === "cdi" && (
+              <Field label="CDI (% a.a.)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  required
+                  value={form.cdi_rate}
+                  onChange={(e) => setForm({ ...form, cdi_rate: e.target.value })}
+                />
+              </Field>
+            )}
+            {form.indexer === "ipca" && (
+              <Field label="IPCA est. (% a.a.)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder="Informar"
+                  value={form.ipca_rate}
+                  onChange={(e) => setForm({ ...form, ipca_rate: e.target.value })}
+                />
+              </Field>
+            )}
             <Field label="Valor aplicado (R$)">
               <Input
                 type="number"
@@ -219,6 +252,7 @@ export default function Investments() {
             <Field label="Vencimento">
               <Input
                 type="date"
+                required={form.liquidity === "maturity"}
                 value={form.maturity}
                 onChange={(e) => setForm({ ...form, maturity: e.target.value })}
               />

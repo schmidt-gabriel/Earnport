@@ -28,6 +28,8 @@ var exportable = []string{
 	// Pessoa Física module (see migrations/1751920000_invest.go).
 	"investments_invest",
 	"settings_invest",
+	"fiis_invest",
+	"fii_dividends_invest",
 }
 
 // registerExportRoutes wires the data-export endpoints.

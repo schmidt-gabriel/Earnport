@@ -1,7 +1,7 @@
 // Calculadora de renda fixa (módulo Pessoa Física).
 //
-// Pure functions, no React, no I/O: a carteira é uma função do CDI e da lista
-// de investimentos.
+// Pure functions, no React, no I/O: a carteira é uma função dos índices e da
+// lista de investimentos.
 //
 // Convention followed everywhere here: percentages arrive the way the user
 // types them (13.9 = 13,9% a.a., 98 = 98% do CDI) and are turned into
@@ -10,13 +10,18 @@
 import type { BaseRecord } from "./types";
 
 export type InvestKind = "cdb" | "lci_lca";
+export type Indexer = "cdi" | "ipca" | "fixed";
 export type Liquidity = "daily" | "maturity" | "market";
 
 export interface Investment extends BaseRecord {
   name: string;
   kind: InvestKind;
-  /** % do CDI contratado (98 = 98% do CDI). */
-  cdi_pct: number;
+  /** Empty on an older backup means CDI. */
+  indexer?: Indexer;
+  /** CDI: % do CDI; IPCA: spread a.a.; fixed: taxa a.a. */
+  rate_pct?: number;
+  /** Legacy CDI rate kept for older backups. */
+  cdi_pct?: number;
   liquidity?: Liquidity;
   /** PocketBase datetime; empty means no maturity (e.g. pure daily liquidity). */
   maturity?: string;
@@ -33,6 +38,21 @@ export interface Investment extends BaseRecord {
 export const DEFAULT_CDI = 13.9;
 
 export const kindLabel = (k: InvestKind) => (k === "cdb" ? "CDB" : "LCI/LCA");
+export const indexerOf = (inv: Investment): Indexer => inv.indexer || "cdi";
+export const contractedRateOf = (inv: Investment) =>
+  inv.indexer ? (inv.rate_pct ?? 0) : (inv.cdi_pct ?? inv.rate_pct ?? 0);
+export const rateLabel = (inv: Investment) => {
+  const indexer = indexerOf(inv);
+  const rate = contractedRateOf(inv).toLocaleString("pt-BR", {
+    minimumFractionDigits: indexer === "fixed" ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+  switch (indexer) {
+    case "ipca": return `IPCA + ${rate}% a.a.`;
+    case "fixed": return `${rate}% a.a. prefixado`;
+    default: return `${rate}% do CDI`;
+  }
+};
 export const liquidityLabel = (l?: Liquidity) =>
   l === "maturity" ? "No vencimento" : l === "market" ? "Mercado" : "Diária";
 
@@ -74,6 +94,10 @@ export const dailyCdi = (cdiAnnualPct: number) =>
  */
 export const growthFactor = (cdiAnnualPct: number, cdiPct: number, businessDays: number) =>
   Math.pow(1 + dailyCdi(cdiAnnualPct) * fromPct(cdiPct), businessDays);
+
+/** Equivalent daily rate for a contracted annual rate. */
+export const annualGrowthFactor = (annualPct: number, businessDays: number) =>
+  Math.pow(1 + fromPct(annualPct), businessDays / BUSINESS_DAYS_PER_YEAR);
 
 /** Dias úteis equivalentes a um número de dias corridos. */
 export const businessDaysIn = (calendarDays: number) =>
@@ -121,6 +145,34 @@ export function yieldOf(
   };
 }
 
+/** Constant-rate estimate for prefixado and IPCA + spread. */
+export function yieldFor(
+  amount: number,
+  inv: Investment,
+  cdiAnnualPct: number,
+  ipcaAnnualPct: number | null,
+  calendarDays: number,
+): Yield | null {
+  const indexer = indexerOf(inv);
+  const rate = contractedRateOf(inv);
+  if (indexer === "cdi") return yieldOf(amount, cdiAnnualPct, rate, inv.kind, calendarDays);
+  if (indexer === "ipca" && ipcaAnnualPct === null) return null;
+
+  const businessDays = businessDaysIn(calendarDays);
+  const annualPct = indexer === "fixed"
+    ? rate
+    : ((1 + fromPct(ipcaAnnualPct!)) * (1 + fromPct(rate)) - 1) * 100;
+  const grossGain = amount * (annualGrowthFactor(annualPct, businessDays) - 1);
+  const taxRate = inv.kind === "cdb" ? irRate(calendarDays) : 0;
+  const tax = grossGain * taxRate;
+  const netGain = grossGain - tax;
+  const cdi100Gain = amount * (growthFactor(cdiAnnualPct, 100, businessDays) - 1);
+  return {
+    businessDays, grossGain, taxRate, tax, net: amount + netGain, netGain,
+    netCdiPct: cdi100Gain > 0 ? (netGain / cdi100Gain) * 100 : 0,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Posições reais (aba Investimentos)
 // ---------------------------------------------------------------------------
@@ -140,8 +192,8 @@ export interface Position {
   amount: number;
   /** Dias corridos rendendo. Para no vencimento se o título já venceu. */
   days: number;
-  /** Resgate hoje: já com o IR da faixa dos `days`. */
-  today: Yield;
+  /** Valor estimado hoje, com IR da faixa dos `days` quando aplicável. */
+  today: Yield | null;
   /** Projeção líquida no vencimento; null se o título não tem vencimento. */
   atMaturity: (Yield & { days: number }) | null;
   matured: boolean;
@@ -152,6 +204,7 @@ export interface Position {
 export function positionOf(
   inv: Investment,
   cdiAnnualPct: number,
+  ipcaAnnualPct: number | null = null,
   now: Date = new Date(),
 ): Position {
   const amount = inv.amount ?? 0;
@@ -162,27 +215,19 @@ export function positionOf(
   // Um título vencido para de render: a contagem trava no vencimento.
   const until = maturity && maturity < today ? maturity : today;
   const days = applied ? daysBetween(applied, until) : 0;
+  const maturityDays = applied && maturity ? daysBetween(applied, maturity) : 0;
+  const maturityYield = applied && maturity
+    ? yieldFor(amount, inv, cdiAnnualPct, ipcaAnnualPct, maturityDays)
+    : null;
 
   return {
     investment: inv,
     amount,
     days,
-    today: yieldOf(amount, cdiAnnualPct, inv.cdi_pct, inv.kind, days),
-    atMaturity:
-      applied && maturity
-        ? {
-            days: daysBetween(applied, maturity),
-            ...yieldOf(
-              amount,
-              cdiAnnualPct,
-              inv.cdi_pct,
-              inv.kind,
-              daysBetween(applied, maturity),
-            ),
-          }
-        : null,
+    today: yieldFor(amount, inv, cdiAnnualPct, ipcaAnnualPct, days),
+    atMaturity: maturityYield ? { days: maturityDays, ...maturityYield } : null,
     matured: !!maturity && maturity < today,
-    pending: !applied || days === 0,
+    pending: !applied || applied > today,
   };
 }
 
@@ -194,11 +239,12 @@ export function positionOf(
 export function positions(
   list: Investment[],
   cdiAnnualPct: number,
+  ipcaAnnualPct: number | null = null,
   now?: Date,
 ): Position[] {
   return list
-    .map((inv) => positionOf(inv, cdiAnnualPct, now))
-    .sort((a, b) => b.today.netCdiPct - a.today.netCdiPct);
+    .map((inv) => positionOf(inv, cdiAnnualPct, ipcaAnnualPct, now))
+    .sort((a, b) => (b.today?.netCdiPct ?? -1) - (a.today?.netCdiPct ?? -1));
 }
 
 /** Somatório da carteira: aplicado, valor hoje e ganho líquido. */
@@ -206,9 +252,10 @@ export function portfolioTotals(list: Position[]) {
   return list.reduce(
     (acc, p) => ({
       amount: acc.amount + p.amount,
-      net: acc.net + p.today.net,
-      netGain: acc.netGain + p.today.netGain,
+      net: acc.net + (p.today?.net ?? 0),
+      netGain: acc.netGain + (p.today?.netGain ?? 0),
+      incomplete: acc.incomplete || p.today === null,
     }),
-    { amount: 0, net: 0, netGain: 0 },
+    { amount: 0, net: 0, netGain: 0, incomplete: false },
   );
 }
