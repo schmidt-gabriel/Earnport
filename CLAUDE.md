@@ -140,17 +140,17 @@ the sidebar hides those selectors there.
 
 ### Pessoa Física: a carteira
 
-**Geral** (`/pf/geral`) is the PF landing page. It sums the fixed-income
-estimated net value and the FIIs market value, while showing cash distributions
-separately. If a fixed-income position has no IPCA estimate, the combined
+**Geral** (`/pf/geral`) is the PF landing page. Its modality card shows
+fixed-income invested principal. The combined current-value summary still sums
+the fixed-income estimated net value and the FIIs market value, while showing
+cash distributions separately. If a fixed-income position has no IPCA estimate, the combined
 current value is marked pending instead of showing a partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
 bought. Each record carries `amount` (valor aplicado), `applied_at` and
 `broker` ("XP"). The card leads with the **invested principal** and shows the
 application date and contracted rate below it. The maturity value is labeled as
-an estimate, with the applicable IR bracket. The portfolio subtitle leads with
-the total principal and places the estimated net value second. Every input field
+an estimate, with the applicable IR bracket. The portfolio subtitle shows the total invested principal. Every input field
 of a title lives inside its modal; only the optional **estimated IPCA** reference
 is editable there when IPCA is selected. The CDI reference remains in
 `settings_invest` for existing projections but has no modal input. An IPCA

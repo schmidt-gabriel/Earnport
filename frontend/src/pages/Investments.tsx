@@ -102,7 +102,6 @@ export default function Investments() {
           {/* A carteira em uma linha. */}
           <p className="mt-1 text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
             {brl(total.amount)} aplicados
-            {total.incomplete ? " · Estimativa pendente" : ` · ${brl(total.net)} líquidos estimados hoje`}
           </p>
         </div>
         <Button onClick={openNew}>+ Adicionar</Button>
