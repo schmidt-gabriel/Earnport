@@ -12,8 +12,8 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 
-	"fabe/backend/internal/fx"
-	"fabe/backend/internal/tax"
+	"earnport/backend/internal/fx"
+	"earnport/backend/internal/tax"
 )
 
 // quoteCache holds the last quote AwesomeAPI returned, so a transient outage

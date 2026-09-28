@@ -1,6 +1,6 @@
 # Pinned so the project name (and with it the pb_data volume) does not follow
 # the checkout directory's name. Renaming the folder used to detach the data.
-name: fabe
+name: earnport
 
 services:
   backend:
@@ -12,8 +12,8 @@ services:
     # Optional master superuser: set both to auto-create/sync a login on
     # startup (skips the manual pbinstall step). Leave unset to disable.
     environment:
-      - FABE_MASTER_EMAIL=${FABE_MASTER_EMAIL:-}
-      - FABE_MASTER_PASSWORD=${FABE_MASTER_PASSWORD:-}
+      - EARNPORT_MASTER_EMAIL=${EARNPORT_MASTER_EMAIL:-${FABE_MASTER_EMAIL:-}}
+      - EARNPORT_MASTER_PASSWORD=${EARNPORT_MASTER_PASSWORD:-${FABE_MASTER_PASSWORD:-}}
     restart: unless-stopped
 
   frontend:
@@ -26,7 +26,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - FABE_BACKEND_URL=http://backend:8090
+      - EARNPORT_BACKEND_URL=http://backend:8090
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -35,3 +35,5 @@ services:
 
 volumes:
   pb_data:
+    # Reuse the existing local database after the Compose project rename.
+    name: fabe_pb_data

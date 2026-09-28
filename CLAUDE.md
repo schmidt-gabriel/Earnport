@@ -4,12 +4,11 @@ Guidance for working in this repository.
 
 ## What this is
 
-**FABE** ("Financial app for Brazilian Dev exporters"), the repository name.
+**Earnport**, a financial app for Brazilian software service exporters.
 Single-user financial control app for a Brazilian PJ that exports
 software/programming services to US clients, receives in USD, brings the money
 into BRL, and pays taxes under **Lucro Presumido**. Used only by the owner.
-On screen it still calls itself "Finance · CNPJ" / "Finance · PF": that is the
-product name in the UI, and the sidebar has no room for the long one.
+The UI uses "Earnport · CNPJ" and "Earnport · PF".
 
 ## Stack
 
@@ -21,7 +20,7 @@ product name in the UI, and the sidebar has no room for the long one.
   `frontend/Dockerfile` is multi-stage: the default target is the production
   image (nginx serving the built SPA, ~78MB) and `--target dev` is the Vite dev
   server used by docker-compose. Both listen on 5173 and proxy `/api` and `/_`
-  to `$FABE_BACKEND_URL`, so the two are interchangeable. CI pushes the default
+  to `$EARNPORT_BACKEND_URL`, so the two are interchangeable. CI pushes the default
   (nginx) target; the nginx proxy config lives in `frontend/nginx.conf.template`.
 
 ## Monorepo layout
@@ -41,7 +40,7 @@ backend/
 frontend/
   src/pages/                    # Dashboard, Remittances, Imports, Expenses,
                                 # ProfitDistributions, Taxes, Config, Export, Login,
-                                # Investments (renda fixa), Fiis (Pessoa Física)
+                                # PortfolioOverview, Investments, Fiis (Pessoa Física)
   src/lib/                      # pb (client + formatters), useCollection, types, theme,
                                 # mode (PJ/PF switch), invest (renda fixa calculator), fiis
   src/components/               # ui primitives, Layout,
@@ -67,9 +66,10 @@ That same email/password logs into both the admin (`:8090/_/`) and the app UI
 `Login.tsx`). There is no separate `users` account. CLI alternative:
 `docker compose exec backend /app/fin superuser upsert EMAIL PASS`.
 
-To skip that step entirely, set **`FABE_MASTER_EMAIL`** and **`FABE_MASTER_PASSWORD`** env
-vars: on every startup `main.go` upserts a superuser with those credentials
-(password kept in sync). Handy for a fresh deploy; leave unset to disable.
+To skip that step entirely, set **`EARNPORT_MASTER_EMAIL`** and
+**`EARNPORT_MASTER_PASSWORD`**. The old `FABE_MASTER_*` names remain accepted
+during migration. On every startup `main.go` upserts a superuser with those
+credentials (password kept in sync). Leave them unset to disable.
 
 ### Working with data / resetting
 
@@ -133,12 +133,17 @@ on the PF side.
 
 The mode is **derived from the route** (`lib/mode.ts`), never held in state, so the
 two can never disagree; localStorage only remembers which side to land on after a
-reload (the `/` route bounces to `/pf` when PF was the side in use, via the `Home`
+reload (the `/` route bounces to `/pf/geral` when PF was the side in use, via the `Home`
 component in `App.tsx`: an inline ternary in the `element` prop would be frozen at
 whatever the mode was when `App` last rendered). PF has no month/year filter, so
 the sidebar hides those selectors there.
 
 ### Pessoa Física: a carteira
+
+**Geral** (`/pf/geral`) is the PF landing page. It sums the fixed-income
+estimated net value and the FIIs market value, while showing cash distributions
+separately. If a fixed-income position has no IPCA estimate, the combined
+current value is marked pending instead of showing a partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
 bought. Each record carries `amount` (valor aplicado), `applied_at` and
@@ -154,6 +159,9 @@ There used to be a second page, **Simulação** (`/pf`), a hypothetical "CDB ou 
 comparator with its own valor/prazo and the tie-rate (`equivalentTaxFreePct`). It
 was removed along with everything that only served it: the page, `RendaFixaCard`,
 the `SimConfig`/`horizon` helpers and the two settings fields.
+
+For positions with liquidity only at maturity, the maturity badge also shows
+the number of calendar days remaining (or "hoje" on the due date).
 
 The card shows **the taxa as it was typed** in the form ("98% do CDI",
 "IPCA + 6% a.a.", or "14,00% a.a. prefixado") plus the IR bracket. It does not show the
@@ -192,6 +200,7 @@ a gross/net/IR breakdown out. Rules:
 
 **FIIs** (`/pf/fiis`) is the renda variável page. Each holding is a snapshot of
 its ticker, number of cotas, average purchase price and manually entered quote.
+The FII broker field suggests brokers already used in either PF portfolio.
 Cash distributions are separate dated records, linked to the FII. The page
 shows market value, unrealized price change and received distributions without
 combining distributions into the price change. Both PF collections are exported

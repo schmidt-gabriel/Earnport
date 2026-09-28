@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	"fabe/backend/internal/fx"
+	"earnport/backend/internal/fx"
 )
 
 func TestQuoteCacheEmpty(t *testing.T) {

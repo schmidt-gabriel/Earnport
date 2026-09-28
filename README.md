@@ -1,12 +1,11 @@
-# FABE
+# Earnport
 
-**Financial app for Brazilian Dev exporters.** Financial control for a Brazilian
-company under Lucro Presumido that exports software services: USD remittances
-received, conversion/import to BRL, expenses, quarterly IRPJ/CSLL assessment, and
+**Earnport** tracks revenue from exported software services and personal
+investments. Built for a Brazilian company under Lucro Presumido, it covers USD
+remittances, conversion to BRL, expenses, quarterly IRPJ/CSLL assessment, and
 profit distribution.
 
-Single-user app (owner only). The UI still calls itself "Finance · CNPJ" /
-"Finance · PF", which is the product name on screen.
+Single-user app (owner only). The UI uses "Earnport · CNPJ" and "Earnport · PF".
 
 ## Stack
 
@@ -36,8 +35,8 @@ Single-user app (owner only). The UI still calls itself "Finance · CNPJ" /
 Single account: the app authenticates directly against PocketBase's superuser.
 There is no separate `users` collection. Create the login in any of these ways:
 
-- **Env vars (recommended for a fresh deploy):** set `FABE_MASTER_EMAIL` and
-  `FABE_MASTER_PASSWORD`. On every startup the backend upserts a superuser with those
+- **Env vars (recommended for a fresh deploy):** set `EARNPORT_MASTER_EMAIL` and
+  `EARNPORT_MASTER_PASSWORD`. On every startup the backend upserts a superuser with those
   credentials (password kept in sync), so you can log in right away.
 - **CLI:** `cd backend && go run . superuser upsert EMAIL PASS` (local), or
   `docker compose exec backend /app/fin superuser upsert EMAIL PASS` (Docker).
@@ -54,7 +53,7 @@ app UI.
 
 ```bash
 # optional: auto-create the login on startup
-export FABE_MASTER_EMAIL=you@example.com FABE_MASTER_PASSWORD=change-me
+export EARNPORT_MASTER_EMAIL=you@example.com EARNPORT_MASTER_PASSWORD=change-me
 
 make up           # docker compose up --build -d  (backend :8090, frontend :5173)
 make logs         # follow logs
@@ -62,6 +61,10 @@ make down         # stop the stack
 ```
 
 Then open the app at http://localhost:5173 and log in (see **Login** above).
+
+Existing local installs: before starting the renamed Compose project, run
+`docker compose -p fabe down` once. The database stays in the existing
+`fabe_pb_data` volume, which the new project reuses. Do not use `down -v`.
 
 ### Local (without Docker)
 
@@ -72,10 +75,13 @@ make test         # tax engine tests
 ```
 
 Create the login with `make admin EMAIL=.. PASS=..`, or export
-`FABE_MASTER_EMAIL`/`FABE_MASTER_PASSWORD` before `make backend`.
+`EARNPORT_MASTER_EMAIL`/`EARNPORT_MASTER_PASSWORD` before `make backend`.
+The old `FABE_MASTER_*` variables remain accepted during migration.
 
 ## Pessoa Física
 
+- **Geral** (`/pf/geral`): valor aplicado e valor atual de renda fixa e FIIs,
+  com proventos recebidos em separado.
 - **Renda fixa** (`/pf`): CDB e LCI/LCA com taxa CDI, IPCA + taxa ou prefixada.
   As referências CDI e IPCA são informadas no modal do investimento.
 - **FIIs** (`/pf/fiis`): informe manualmente ticker, cotas, preço médio,

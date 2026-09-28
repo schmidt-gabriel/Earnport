@@ -179,7 +179,7 @@ export default function Export() {
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={() => run("backup", "/api/export/backup", "fabe-backup.json")}
+            onClick={() => run("backup", "/api/export/backup", "earnport-backup.json")}
             disabled={busy === "backup"}
           >
             {busy === "backup" ? "Exportando…" : "Baixar backup (JSON)"}

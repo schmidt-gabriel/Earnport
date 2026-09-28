@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { pb } from "./lib/pb";
-import { savedMode } from "./lib/mode";
+import { modeHome, savedMode } from "./lib/mode";
 import { YearProvider } from "./lib/year";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
@@ -13,6 +13,7 @@ import Expenses from "./pages/Expenses";
 import ProfitDistributions from "./pages/ProfitDistributions";
 import Config from "./pages/Config";
 import Investments from "./pages/Investments";
+import PortfolioOverview from "./pages/PortfolioOverview";
 import Fiis from "./pages/Fiis";
 
 // Landing route. The CNPJ Dashboard owns "/", so a reload while the Pessoa
@@ -21,7 +22,7 @@ import Fiis from "./pages/Fiis";
 // renders, which a route change does not do, so the decision would be frozen
 // at whatever the mode was on the first render.
 function Home() {
-  return savedMode() === "pf" ? <Navigate to="/pf" replace /> : <Dashboard />;
+  return savedMode() === "pf" ? <Navigate to={modeHome("pf")} replace /> : <Dashboard />;
 }
 
 export default function App() {
@@ -43,7 +44,8 @@ export default function App() {
           <Route path="impostos" element={<Taxes />} />
           <Route path="config" element={<Config />} />
 
-          {/* Pessoa Física: renda fixa e FIIs. */}
+          {/* Pessoa Física: visão geral, renda fixa e FIIs. */}
+          <Route path="pf/geral" element={<PortfolioOverview />} />
           <Route path="pf" element={<Investments />} />
           <Route path="pf/fiis" element={<Fiis />} />
         </Route>

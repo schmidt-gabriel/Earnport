@@ -18,4 +18,4 @@ export const savedMode = (): Mode => (localStorage.getItem(KEY) === "pf" ? "pf" 
 
 export const saveMode = (mode: Mode) => localStorage.setItem(KEY, mode);
 
-export const modeHome = (mode: Mode) => (mode === "pf" ? "/pf" : "/");
+export const modeHome = (mode: Mode) => (mode === "pf" ? "/pf/geral" : "/");
