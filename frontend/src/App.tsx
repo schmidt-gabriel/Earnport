@@ -13,6 +13,7 @@ import Expenses from "./pages/Expenses";
 import ProfitDistributions from "./pages/ProfitDistributions";
 import Config from "./pages/Config";
 import Investments from "./pages/Investments";
+import Fiis from "./pages/Fiis";
 
 // Landing route. The CNPJ Dashboard owns "/", so a reload while the Pessoa
 // Física side was in use is bounced over to it. It has to be a component (not
@@ -42,8 +43,9 @@ export default function App() {
           <Route path="impostos" element={<Taxes />} />
           <Route path="config" element={<Config />} />
 
-          {/* Pessoa Física: a carteira de renda fixa, página única. */}
+          {/* Pessoa Física: renda fixa e FIIs. */}
           <Route path="pf" element={<Investments />} />
+          <Route path="pf/fiis" element={<Fiis />} />
         </Route>
       </Routes>
     </YearProvider>

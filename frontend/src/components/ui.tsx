@@ -71,7 +71,7 @@ export function Modal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
-      <Card className="w-full max-w-md">
+      <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto">
         <div onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-neutral-800">
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>

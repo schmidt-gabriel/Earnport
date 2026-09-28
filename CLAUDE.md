@@ -41,13 +41,13 @@ backend/
 frontend/
   src/pages/                    # Dashboard, Remittances, Imports, Expenses,
                                 # ProfitDistributions, Taxes, Config, Export, Login,
-                                # Investments (Pessoa Física)
+                                # Investments (renda fixa), Fiis (Pessoa Física)
   src/lib/                      # pb (client + formatters), useCollection, types, theme,
-                                # mode (PJ/PF switch), invest (renda fixa calculator)
+                                # mode (PJ/PF switch), invest (renda fixa calculator), fiis
   src/components/               # ui primitives, Layout,
                                 # OverviewSections (year strip + month cards of
                                 # the landing page), charts (SVG chart kit),
-                                # invest (PF: CDI hook + position card)
+                                # invest (PF: rate inputs + position card)
 docker-compose.yml, Makefile      # data backup lives OUTSIDE the repo (see below)
 ```
 
@@ -109,8 +109,13 @@ scheduled, paid, payment_type auto|manual),
 `tax_periods` (year, quarter, snapshot fields, locked), `settings` (singleton, tax params).
 
 Pessoa Física (suffix `_invest`, see **Modalidades** below):
-`investments_invest` (name, broker, kind cdb|lci_lca, cdi_pct, amount, applied_at,
-liquidity daily|maturity|market, maturity), `settings_invest` (singleton: cdi_rate).
+`investments_invest` (name, broker, kind cdb|lci_lca, indexer cdi|ipca|fixed,
+rate_pct, amount, applied_at, liquidity daily|maturity|market, maturity),
+`settings_invest` (singleton: cdi_rate, optional ipca_rate estimate),
+`fiis_invest` (ticker, quantity, average_price, current_price, quoted_at,
+broker), `fii_dividends_invest` (fii relation, payment_date, amount).
+The legacy `cdi_pct` field remains for old backup imports; new positions use
+`indexer` and `rate_pct`.
 The settings singleton used to carry the simulation's `amount` and `months` as well;
 both were dropped with the Simulação page by
 `migrations/1751950000_invest_drop_simulation.go`.
@@ -135,38 +140,41 @@ the sidebar hides those selectors there.
 
 ### Pessoa Física: a carteira
 
-One page, **Investimentos** (`/pf`), and it is the **real carteira**: the titles
-actually bought. Each record carries `amount` (valor aplicado), `applied_at` and
-`broker` ("XP"), so the card answers **"quanto tenho hoje"**: the net value of a
-resgate right now, IR already taken off by the bracket of the calendar days since
+**Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
+bought. Each record carries `amount` (valor aplicado), `applied_at` and
+`broker` ("XP"), so the card estimates **"quanto tenho hoje"**, IR already taken off by the bracket of the calendar days since
 the application, with the maturity projection as a secondary line and the portfolio
 total in the subtitle. Every input field of a title lives inside its modal; the
-**CDI** is the exception, since it indexes the whole carteira: it sits in the header
-beside "+ Adicionar" and is persisted in the `settings_invest` singleton with a
-debounce.
+**CDI** and an optional **estimated IPCA** appear only in the investment modal,
+when their indexer is selected. They are shared references persisted in the
+`settings_invest` singleton after the modal saves. An IPCA position has no
+estimated value until the user provides an IPCA estimate.
 
 There used to be a second page, **Simulação** (`/pf`), a hypothetical "CDB ou LCI?"
 comparator with its own valor/prazo and the tie-rate (`equivalentTaxFreePct`). It
 was removed along with everything that only served it: the page, `RendaFixaCard`,
 the `SimConfig`/`horizon` helpers and the two settings fields.
 
-The card shows, under "quanto tenho hoje", **the taxa as it was typed** in the form
-(`cdi_pct`, "98% do CDI") plus the IR bracket. It deliberately does not show the
+The card shows **the taxa as it was typed** in the form ("98% do CDI",
+"IPCA + 6% a.a.", or "14,00% a.a. prefixado") plus the IR bracket. It does not show the
 ganho líquido in reais nor the **% líquido do CDI**: both read as `0` on a position
 applied today, which is exactly when the card is looked at.
 
 Investimentos still **sorts** by that % líquido do CDI (`netCdiPct`): real positions
 have different sizes, so ordering by reais would just crown the biggest application,
-and the tax-adjusted ratio is the only fair comparison between a CDB and an LCI. The
+and the tax-adjusted ratio compares positions against the same CDI reference. The
 order is the whole statement, there is no "melhor" badge on a card.
 
 The engine is `frontend/src/lib/invest.ts`, pure and free of React/IO. It runs in
-the browser rather than in Go because the CDI recomputes the whole carteira on every
-keystroke. `yieldOf` is the core: an amount, a taxa and a number of calendar days in,
+the browser rather than in Go because rate changes recompute the whole carteira on every
+keystroke. `yieldFor` is the core: an amount, a taxa and a number of calendar days in,
 a gross/net/IR breakdown out. Rules:
 
 - **Capitalização em dias úteis (252/ano):** taxa diária = `(1+CDI)^(1/252)-1`, e o
-  rendimento é `(1 + taxa_diária × %CDI)^dias_úteis`.
+  rendimento de títulos CDI é `(1 + taxa_diária × %CDI)^dias_úteis`.
+  Prefixados usam `(1 + taxa anual)^dias_úteis/252`; IPCA + spread usa
+  `(1 + IPCA estimado) × (1 + spread) - 1` como taxa anual. Esses valores são
+  estimativas, não histórico de índices ou cotação de mercado.
 - **Prazo:** os dias corridos vêm do calendário, contados da data da aplicação; os
   **dias úteis** são derivados por `dias_corridos × 252/365`, o que embute os
   feriados sem precisar de uma tabela deles (12 meses = 365 dias = 252 dias úteis,
@@ -177,8 +185,18 @@ a gross/net/IR breakdown out. Rules:
   prazo. Não é exibido; serve para ranquear posições de tamanhos diferentes.
 - **Um título vencido para de render:** a contagem de dias trava no vencimento, e o
   card ganha o badge "Vencido".
+- **Liquidez no vencimento:** o valor de hoje é uma estimativa contábil, não um
+  valor resgatável hoje. Sem IPCA estimado, a carteira marca o total como pendente.
 - **Avisos** (badges, nunca parágrafos): um título já vencido marca "Vencido" e um
   sem data de aplicação marca "Sem data de aplicação".
+
+**FIIs** (`/pf/fiis`) is the renda variável page. Each holding is a snapshot of
+its ticker, number of cotas, average purchase price and manually entered quote.
+Cash distributions are separate dated records, linked to the FII. The page
+shows market value, unrealized price change and received distributions without
+combining distributions into the price change. Both PF collections are exported
+and imported with backups. Automatic quotes and distribution imports are a
+possible future feature; this version keeps both inputs manual.
 
 UI text on the PF side is deliberately terse: labels of at most 5 words, one badge
 per fact. No tooltips, no educational paragraphs. Percentages go through `pct()` in

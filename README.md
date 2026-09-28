@@ -74,6 +74,17 @@ make test         # tax engine tests
 Create the login with `make admin EMAIL=.. PASS=..`, or export
 `FABE_MASTER_EMAIL`/`FABE_MASTER_PASSWORD` before `make backend`.
 
+## Pessoa Física
+
+- **Renda fixa** (`/pf`): CDB e LCI/LCA com taxa CDI, IPCA + taxa ou prefixada.
+  As referências CDI e IPCA são informadas no modal do investimento.
+- **FIIs** (`/pf/fiis`): informe manualmente ticker, cotas, preço médio,
+  cotação e proventos recebidos. A tela mostra o valor atual, a variação de
+  preço e o histórico de proventos.
+
+Uma possível evolução futura é atualizar cotações e importar proventos
+automaticamente. A versão atual usa somente os valores informados pelo usuário.
+
 ## Tax parameters
 
 Rates live in the `settings` collection (editable, no code changes):

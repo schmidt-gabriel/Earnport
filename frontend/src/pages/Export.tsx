@@ -14,6 +14,8 @@ const COLLECTIONS = [
   { name: "recurring_services", label: "Serviços recorrentes" },
   { name: "settings", label: "Configurações" },
   { name: "investments_invest", label: "Investimentos (PF)" },
+  { name: "fiis_invest", label: "FIIs (PF)" },
+  { name: "fii_dividends_invest", label: "Proventos de FIIs (PF)" },
 ];
 
 async function download(path: string, filename: string) {
