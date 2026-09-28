@@ -83,7 +83,7 @@ The old `FABE_MASTER_*` variables remain accepted during migration.
 - **Geral** (`/pf/geral`): valor aplicado e valor atual de renda fixa e FIIs,
   com proventos recebidos em separado.
 - **Renda fixa** (`/pf`): CDB e LCI/LCA com taxa CDI, IPCA + taxa ou prefixada.
-  As referências CDI e IPCA são informadas no modal do investimento.
+  O valor aplicado aparece em destaque. A estimativa de IPCA é informada no modal do investimento.
 - **FIIs** (`/pf/fiis`): informe manualmente ticker, cotas, preço médio,
   cotação e proventos recebidos. A tela mostra o valor atual, a variação de
   preço e o histórico de proventos.

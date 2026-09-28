@@ -147,13 +147,14 @@ current value is marked pending instead of showing a partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
 bought. Each record carries `amount` (valor aplicado), `applied_at` and
-`broker` ("XP"), so the card estimates **"quanto tenho hoje"**, IR already taken off by the bracket of the calendar days since
-the application, with the maturity projection as a secondary line and the portfolio
-total in the subtitle. Every input field of a title lives inside its modal; the
-**CDI** and an optional **estimated IPCA** appear only in the investment modal,
-when their indexer is selected. They are shared references persisted in the
-`settings_invest` singleton after the modal saves. An IPCA position has no
-estimated value until the user provides an IPCA estimate.
+`broker` ("XP"). The card leads with the **invested principal** and shows the
+application date and contracted rate below it. The maturity value is labeled as
+an estimate, with the applicable IR bracket. The portfolio subtitle leads with
+the total principal and places the estimated net value second. Every input field
+of a title lives inside its modal; only the optional **estimated IPCA** reference
+is editable there when IPCA is selected. The CDI reference remains in
+`settings_invest` for existing projections but has no modal input. An IPCA
+position has no estimated value until the user provides an IPCA estimate.
 
 There used to be a second page, **Simulação** (`/pf`), a hypothetical "CDB ou LCI?"
 comparator with its own valor/prazo and the tie-rate (`equivalentTaxFreePct`). It

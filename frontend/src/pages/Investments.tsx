@@ -16,14 +16,11 @@ const empty = {
   applied_at: "",
   liquidity: "maturity",
   maturity: "",
-  cdi_rate: "",
   ipca_rate: "",
 };
 
-// A carteira: os títulos que foram comprados, cada um com o que foi aplicado e
-// quando. O card mostra uma estimativa líquida, com IR pela faixa dos dias
-// corridos. Todos os campos de entrada, incluindo as referências CDI/IPCA,
-// ficam no modal.
+// Purchased fixed-income positions lead with invested principal.
+// The optional IPCA reference remains in the investment modal.
 export default function Investments() {
   const { list, create, update, remove } = useCollection<Investment>(
     "investments_invest",
@@ -46,7 +43,7 @@ export default function Investments() {
 
   function openNew() {
     setEditing(null);
-    setForm({ ...empty, cdi_rate: String(cdi), ipca_rate: ipca === null ? "" : String(ipca) });
+    setForm({ ...empty, ipca_rate: ipca === null ? "" : String(ipca) });
     setOpen(true);
   }
 
@@ -62,7 +59,6 @@ export default function Investments() {
       applied_at: toDateInput(inv.applied_at),
       liquidity: inv.liquidity ?? "maturity",
       maturity: toDateInput(inv.maturity),
-      cdi_rate: String(cdi),
       ipca_rate: ipca === null ? "" : String(ipca),
     });
     setOpen(true);
@@ -85,7 +81,6 @@ export default function Investments() {
     };
     if (editing) await update.mutateAsync({ id: editing.id, data });
     else await create.mutateAsync(data);
-    if (form.indexer === "cdi") await saveReference("cdi", Number(form.cdi_rate));
     if (form.indexer === "ipca") {
       await saveReference("ipca", form.ipca_rate === "" ? null : Number(form.ipca_rate));
     }
@@ -106,13 +101,8 @@ export default function Investments() {
           <h1 className="text-2xl font-semibold">Renda fixa</h1>
           {/* A carteira em uma linha. */}
           <p className="mt-1 text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
-            {total.incomplete ? "Estimativa pendente · " : `${brl(total.net)} hoje · `}
             {brl(total.amount)} aplicados
-            {!total.incomplete && (
-              <span className="text-emerald-600 dark:text-emerald-400">
-                {" · + "}{brl(total.netGain)}
-              </span>
-            )}
+            {total.incomplete ? " · Estimativa pendente" : ` · ${brl(total.net)} líquidos estimados hoje`}
           </p>
         </div>
         <Button onClick={openNew}>+ Adicionar</Button>
@@ -197,18 +187,6 @@ export default function Investments() {
                 onChange={(e) => setForm({ ...form, rate_pct: e.target.value })}
               />
             </Field>
-            {form.indexer === "cdi" && (
-              <Field label="CDI (% a.a.)">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  required
-                  value={form.cdi_rate}
-                  onChange={(e) => setForm({ ...form, cdi_rate: e.target.value })}
-                />
-              </Field>
-            )}
             {form.indexer === "ipca" && (
               <Field label="IPCA est. (% a.a.)">
                 <Input

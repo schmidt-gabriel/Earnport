@@ -23,8 +23,8 @@ type InvestSettings = {
 };
 
 /**
- * CDI and optional IPCA estimate, saved in `settings_invest` when the
- * investment modal is submitted.
+ * Stored CDI reference and optional IPCA estimate from `settings_invest`.
+ * Only the IPCA estimate can be edited in the investment modal.
  */
 export function useRates() {
   const { list, create, update } = useCollection<InvestSettings>("settings_invest", {
@@ -93,7 +93,7 @@ function Badge({
 }
 
 /**
- * A real position with an estimated current value after the applicable IR.
+ * A real position led by its invested principal, with a maturity estimate.
  * A maturity-only investment is not available for redemption today.
  */
 export function PositionCard({
@@ -116,15 +116,16 @@ export function PositionCard({
 
       <div className="mt-4 space-y-1">
         <p className="text-2xl font-semibold tabular-nums">
-          {p.today ? brl(p.today.net) : "Sem estimativa"}
+          {brl(p.amount)}
         </p>
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          {inv.liquidity === "maturity" ? "Valor estimado hoje" : "Valor líquido estimado hoje"}
+          Valor aplicado
         </p>
-        <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-          {brl(p.amount)} aplicados
-          {inv.applied_at && ` em ${fmtDate(inv.applied_at)}`}
-        </p>
+        {inv.applied_at && (
+          <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+            Aplicado em {fmtDate(inv.applied_at)}
+          </p>
+        )}
         {/* A taxa contratada, como ela foi digitada no formulário. */}
         <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
           {rateLabel(inv)}
@@ -132,7 +133,7 @@ export function PositionCard({
         </p>
         {p.atMaturity && !p.matured && (
           <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-            No vencimento: {brl(p.atMaturity.net)}
+            Estimativa no vencimento: {brl(p.atMaturity.net)}
           </p>
         )}
       </div>
