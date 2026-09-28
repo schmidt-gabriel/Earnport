@@ -46,7 +46,7 @@ func registerExportRoutes(app core.App, e *core.ServeEvent) {
 			}
 			dump[name] = records
 		}
-		re.Response.Header().Set("Content-Disposition", `attachment; filename="fabe-backup.json"`)
+		re.Response.Header().Set("Content-Disposition", `attachment; filename="earnport-backup.json"`)
 		return re.JSON(http.StatusOK, dump)
 	}).Bind(apis.RequireAuth())
 

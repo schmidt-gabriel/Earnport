@@ -66,6 +66,8 @@ export function useRates() {
   return {
     cdi: rates?.cdi ?? DEFAULT_CDI,
     ipca: rates?.ipca ?? null,
+    ready: rates !== null,
+    error: list.isError,
     saveReference,
   };
 }
@@ -138,7 +140,16 @@ export function PositionCard({
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
         <Badge>{liquidityLabel(inv.liquidity)}</Badge>
         {indexerOf(inv) === "ipca" && !p.today && <Badge tone="warn">Informe IPCA estimado</Badge>}
-        {inv.maturity && <Badge>Vence {fmtDate(inv.maturity)}</Badge>}
+        {inv.maturity && (
+          <Badge>
+            Vence {fmtDate(inv.maturity)}
+            {inv.liquidity === "maturity" && !p.matured && p.daysUntilMaturity !== null && (
+              p.daysUntilMaturity === 0
+                ? " · hoje"
+                : ` · faltam ${p.daysUntilMaturity} ${p.daysUntilMaturity === 1 ? "dia" : "dias"}`
+            )}
+          </Badge>
+        )}
         {p.matured && <Badge tone="warn">Vencido</Badge>}
         {p.pending && (
           <Badge tone="warn">

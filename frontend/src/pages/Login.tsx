@@ -26,7 +26,7 @@ export default function Login({ onAuth }: { onAuth: () => void }) {
         <form onSubmit={submit} className="space-y-5 p-8">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
-              Finance · CNPJ
+              Earnport
             </h1>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Controle financeiro da empresa. <br /> Entre para continuar.

@@ -1,4 +1,4 @@
-module fabe/backend
+module earnport/backend
 
 go 1.26.4
 

@@ -196,6 +196,8 @@ export interface Position {
   today: Yield | null;
   /** Projeção líquida no vencimento; null se o título não tem vencimento. */
   atMaturity: (Yield & { days: number }) | null;
+  /** Calendar days until maturity, with zero on the maturity date. */
+  daysUntilMaturity: number | null;
   matured: boolean;
   /** Aplicação futura (data ainda por vir) ou sem data: nada rendeu ainda. */
   pending: boolean;
@@ -208,7 +210,8 @@ export function positionOf(
   now: Date = new Date(),
 ): Position {
   const amount = inv.amount ?? 0;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Match parseDate's local noon so an application dated today is not future.
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
   const applied = parseDate(inv.applied_at);
   const maturity = maturityOf(inv);
 
@@ -226,6 +229,7 @@ export function positionOf(
     days,
     today: yieldFor(amount, inv, cdiAnnualPct, ipcaAnnualPct, days),
     atMaturity: maturityYield ? { days: maturityDays, ...maturityYield } : null,
+    daysUntilMaturity: maturity ? daysBetween(today, maturity) : null,
     matured: !!maturity && maturity < today,
     pending: !applied || applied > today,
   };

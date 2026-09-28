@@ -13,10 +13,10 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/hook"
 
-	"fabe/backend/internal/api"
+	"earnport/backend/internal/api"
 
 	// auto-register Go migrations (collections + seed data)
-	_ "fabe/backend/migrations"
+	_ "earnport/backend/migrations"
 )
 
 func main() {
@@ -33,8 +33,8 @@ func main() {
 	api.Register(app)
 
 	// Startup bootstrap, once the DB and migrations are ready (OnServe runs
-	// after bootstrap): the optional master superuser (FABE_MASTER_EMAIL +
-	// FABE_MASTER_PASSWORD) so a fresh deploy can log in without the pbinstall step,
+	// after bootstrap): the optional master superuser (EARNPORT_MASTER_EMAIL +
+	// EARNPORT_MASTER_PASSWORD) so a fresh deploy can log in without the pbinstall step,
 	// and a default settings record so /api/tax/* works before any import.
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		ensureMasterUser(app)
@@ -66,12 +66,19 @@ func publicDir() string {
 	return filepath.Join(filepath.Dir(os.Args[0]), "pb_public")
 }
 
-// ensureMasterUser upserts a superuser from FABE_MASTER_EMAIL/FABE_MASTER_PASSWORD when
+func envWithLegacy(primary, legacy string) string {
+	if value := os.Getenv(primary); value != "" {
+		return value
+	}
+	return os.Getenv(legacy)
+}
+
+// ensureMasterUser upserts a superuser from EARNPORT_MASTER_EMAIL/EARNPORT_MASTER_PASSWORD when
 // both are set, keeping the password in sync on every startup. A no-op when
 // the vars are absent.
 func ensureMasterUser(app core.App) {
-	email := strings.TrimSpace(os.Getenv("FABE_MASTER_EMAIL"))
-	password := os.Getenv("FABE_MASTER_PASSWORD")
+	email := strings.TrimSpace(envWithLegacy("EARNPORT_MASTER_EMAIL", "FABE_MASTER_EMAIL"))
+	password := envWithLegacy("EARNPORT_MASTER_PASSWORD", "FABE_MASTER_PASSWORD")
 	if email == "" || password == "" {
 		return
 	}

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../lib/useCollection";
 import { brl, fmtDate, fromDateInput, pct, toDateInput } from "../lib/pb";
+import type { Investment } from "../lib/invest";
 import {
   fiiTotals,
   holdingChange,
@@ -37,6 +38,7 @@ const tone = (value: number) =>
 
 export default function Fiis() {
   const holdings = useCollection<FiiHolding>("fiis_invest", { sort: "ticker" });
+  const investments = useCollection<Investment>("investments_invest", { sort: "name" });
   const payments = useCollection<FiiDividend>("fii_dividends_invest", { sort: "-payment_date" });
   const qc = useQueryClient();
   const [fiiOpen, setFiiOpen] = useState(false);
@@ -57,6 +59,11 @@ export default function Fiis() {
   }, [searchParams]);
 
   const fiis = holdings.list.data ?? [];
+  const brokers = [...new Set(
+    [...fiis, ...(investments.list.data ?? [])]
+      .map((item) => item.broker?.trim())
+      .filter((broker): broker is string => !!broker),
+  )].sort();
   const dividends = payments.list.data ?? [];
   const totals = fiiTotals(fiis, dividends);
   const tickerById = new Map(fiis.map((fii) => [fii.id, fii.ticker]));
@@ -278,9 +285,12 @@ export default function Fiis() {
                 onChange={(e) => setFiiForm({ ...fiiForm, name: e.target.value })} />
             </Field>
             <Field label="Corretora">
-              <Input maxLength={100} value={fiiForm.broker}
+              <Input list="fii-brokers" maxLength={100} value={fiiForm.broker}
                 onChange={(e) => setFiiForm({ ...fiiForm, broker: e.target.value })} />
             </Field>
+            <datalist id="fii-brokers">
+              {brokers.map((broker) => <option key={broker} value={broker} />)}
+            </datalist>
             <Field label="Quantidade de cotas">
               <Input required type="number" min={1} step={1} value={fiiForm.quantity}
                 onChange={(e) => setFiiForm({ ...fiiForm, quantity: e.target.value })} />

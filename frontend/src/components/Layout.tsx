@@ -21,6 +21,7 @@ const navAnnual = [
 // Pessoa Física: a separate app sharing the same DB (collections suffixed
 // `_invest`). It has no month/year filter.
 const navPF = [
+  { to: "/pf/geral", label: "Geral", end: true },
   { to: "/pf", label: "Renda fixa", end: true, newTo: "/pf?new=1" },
   { to: "/pf/fiis", label: "FIIs", end: true, newTo: "/pf/fiis?new=1" },
 ];
@@ -138,7 +139,10 @@ export default function Layout() {
   // Which side of the app is on screen. Derived from the route, and remembered
   // so a reload lands on the same side.
   const mode = modeOf(useLocation().pathname);
-  useEffect(() => saveMode(mode), [mode]);
+  useEffect(() => {
+    saveMode(mode);
+    document.title = mode === "pf" ? "Earnport · PF" : "Earnport · CNPJ";
+  }, [mode]);
   // Same pattern as the Overview dropdown: don't offer future months in the
   // current year.
   const now = new Date();
@@ -164,7 +168,7 @@ export default function Layout() {
           </div>
           <div className="px-2 pb-3 pt-1">
             <h1 className="text-lg font-semibold">
-              {mode === "pf" ? "Finance · PF" : "Finance · CNPJ"}
+              {mode === "pf" ? "Earnport · PF" : "Earnport · CNPJ"}
             </h1>
             {mode === "pj" && cnpj && (
               <p className="text-xs text-neutral-500 dark:text-neutral-400">{cnpj}</p>
