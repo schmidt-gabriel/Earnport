@@ -82,7 +82,8 @@ The old `FABE_MASTER_*` variables remain accepted during migration.
 
 - **Geral** (`/pf/geral`): valor aplicado e valor atual de renda fixa e FIIs,
   com proventos recebidos em separado. Mostra o principal dos títulos com
-  liquidez diária disponível e as próximas datas de resgate no vencimento.
+  liquidez diária disponível, além das próximas datas de resgate e seus
+  valores líquidos estimados no vencimento.
 - **Renda fixa** (`/pf`): CDB e LCI/LCA com taxa CDI, IPCA + taxa ou prefixada.
   O valor aplicado aparece em destaque. A estimativa de IPCA é informada no modal do investimento.
 - **FIIs** (`/pf/fiis`): informe manualmente ticker, cotas, preço médio,

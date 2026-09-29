@@ -104,10 +104,22 @@ export default function PortfolioOverview() {
             <ul className="mt-3 divide-y divide-neutral-100 dark:divide-neutral-800">
               {upcoming.map((p) => (
                 <li key={p.investment.id} className="flex justify-between gap-3 py-2 text-sm">
-                  <span className="min-w-0 truncate">{p.investment.name}</span>
-                  <span className="shrink-0 tabular-nums text-neutral-500 dark:text-neutral-400">
-                    {fmtDate(p.investment.maturity!)}
-                    {p.daysUntilMaturity === 0 && " · hoje"}
+                  <span className="min-w-0">
+                    <span className="block truncate">{p.investment.name}</span>
+                    <span className="block tabular-nums text-xs text-neutral-500 dark:text-neutral-400">
+                      {fmtDate(p.investment.maturity!)}
+                      {p.daysUntilMaturity === 0 && " · hoje"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block tabular-nums">
+                      {p.atMaturity ? brl(p.atMaturity.net) : "Estimativa pendente"}
+                    </span>
+                    {p.atMaturity && (
+                      <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                        Líquido estimado
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}

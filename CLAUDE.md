@@ -144,8 +144,9 @@ the sidebar hides those selectors there.
 fixed-income invested principal. The combined current-value summary still sums
 the fixed-income estimated net value and the FIIs market value, while showing
 cash distributions separately. It also lists the invested principal in active
-daily-liquidity positions and the maturity dates of active positions redeemable
-only at maturity. Future applications and missing application dates are excluded.
+daily-liquidity positions and the maturity dates and projected net values of
+active positions redeemable only at maturity. A missing IPCA reference leaves
+that projected value pending. Future applications and missing application dates are excluded.
 If a fixed-income position has no IPCA estimate, the combined current value is
 marked pending instead of showing a partial total.
 
