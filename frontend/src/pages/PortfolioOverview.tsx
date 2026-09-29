@@ -3,7 +3,7 @@ import { Card } from "../components/ui";
 import { useRates } from "../components/invest";
 import { fiiTotals, type FiiDividend, type FiiHolding } from "../lib/fiis";
 import { portfolioTotals, positions, type Investment } from "../lib/invest";
-import { brl } from "../lib/pb";
+import { brl, fmtDate } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
 
 export default function PortfolioOverview() {
@@ -12,7 +12,25 @@ export default function PortfolioOverview() {
   const dividends = useCollection<FiiDividend>("fii_dividends_invest", { sort: "-payment_date" });
   const { cdi, ipca, ready: ratesReady, error: ratesError } = useRates();
 
-  const fixed = portfolioTotals(positions(investments.list.data ?? [], cdi, ipca));
+  const fixedPositions = positions(investments.list.data ?? [], cdi, ipca);
+  const fixed = portfolioTotals(fixedPositions);
+  const daily = fixedPositions.filter(
+    (p) => p.investment.liquidity === "daily" && !p.pending && p.amount > 0,
+  );
+  const dailyPrincipal = daily.reduce((sum, p) => sum + p.amount, 0);
+  const upcoming = fixedPositions
+    .filter(
+      (p) =>
+        p.investment.liquidity === "maturity" &&
+        !p.pending &&
+        !p.matured &&
+        p.daysUntilMaturity !== null &&
+        !!p.investment.maturity,
+    )
+    .sort((a, b) =>
+      (a.daysUntilMaturity ?? 0) - (b.daysUntilMaturity ?? 0) ||
+      a.investment.name.localeCompare(b.investment.name),
+    );
   const variable = fiiTotals(fiis.list.data ?? [], dividends.list.data ?? []);
   const applied = fixed.amount + variable.cost;
   const current = fixed.net + variable.value;
@@ -57,6 +75,62 @@ export default function PortfolioOverview() {
           Informe o IPCA estimado em Renda fixa para completar a estimativa.
         </p>
       )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className="p-4">
+          <h2 className="font-semibold">Disponível para resgate</h2>
+          <p className="mt-3 text-xl font-semibold tabular-nums">{brl(dailyPrincipal)}</p>
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            Principal aplicado · liquidez diária
+          </p>
+          {daily.length > 0 ? (
+            <ul className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
+              {daily.map((p) => (
+                <li key={p.investment.id} className="flex justify-between gap-3 py-2 text-sm">
+                  <span className="min-w-0 truncate">{p.investment.name}</span>
+                  <span className="shrink-0 tabular-nums">{brl(p.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
+              Nenhum título com liquidez diária.
+            </p>
+          )}
+        </Card>
+        <Card className="p-4">
+          <h2 className="font-semibold">Próximas datas de resgate</h2>
+          {upcoming.length > 0 ? (
+            <ul className="mt-3 divide-y divide-neutral-100 dark:divide-neutral-800">
+              {upcoming.map((p) => (
+                <li key={p.investment.id} className="flex justify-between gap-3 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate">{p.investment.name}</span>
+                    <span className="block tabular-nums text-xs text-neutral-500 dark:text-neutral-400">
+                      {fmtDate(p.investment.maturity!)}
+                      {p.daysUntilMaturity === 0 && " · hoje"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block tabular-nums">
+                      {p.atMaturity ? brl(p.atMaturity.net) : "Estimativa pendente"}
+                    </span>
+                    {p.atMaturity && (
+                      <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                        Líquido estimado
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+              Nenhum resgate agendado.
+            </p>
+          )}
+        </Card>
+      </div>
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Por modalidade</h2>
