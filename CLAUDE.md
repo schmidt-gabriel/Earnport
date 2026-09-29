@@ -143,7 +143,9 @@ the sidebar hides those selectors there.
 **Geral** (`/pf/geral`) is the PF landing page. Its modality card shows
 fixed-income invested principal. The combined current-value summary still sums
 the fixed-income estimated net value and the FIIs market value, while showing
-cash distributions separately. It also lists the invested principal in active
+cash distributions separately. The Result breakdown lists the estimated net
+gain of each fixed-income position and the price change of each FII, excluding
+cash distributions. It also lists the invested principal in active
 daily-liquidity positions and the maturity dates and projected net values of
 active positions redeemable only at maturity. A missing IPCA reference leaves
 that projected value pending. Future applications and missing application dates are excluded.

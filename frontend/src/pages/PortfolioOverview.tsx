@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "../components/ui";
 import { useRates } from "../components/invest";
-import { fiiTotals, type FiiDividend, type FiiHolding } from "../lib/fiis";
+import { fiiTotals, holdingChange, type FiiDividend, type FiiHolding } from "../lib/fiis";
 import { portfolioTotals, positions, type Investment } from "../lib/invest";
 import { brl, fmtDate } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
@@ -32,6 +32,26 @@ export default function PortfolioOverview() {
       a.investment.name.localeCompare(b.investment.name),
     );
   const variable = fiiTotals(fiis.list.data ?? [], dividends.list.data ?? []);
+  const resultGroups = [
+    {
+      label: "Renda fixa",
+      rows: fixedPositions.map((p) => ({
+        id: p.investment.id,
+        name: p.investment.name,
+        detail: p.pending ? "Aplicação pendente" : "Ganho líquido estimado",
+        value: p.today?.netGain ?? null,
+      })),
+    },
+    {
+      label: "FIIs",
+      rows: (fiis.list.data ?? []).map((fii) => ({
+        id: fii.id,
+        name: fii.ticker,
+        detail: "Variação da cotação",
+        value: holdingChange(fii),
+      })),
+    },
+  ];
   const applied = fixed.amount + variable.cost;
   const current = fixed.net + variable.value;
   const incomplete = fixed.incomplete;
@@ -75,6 +95,48 @@ export default function PortfolioOverview() {
           Informe o IPCA estimado em Renda fixa para completar a estimativa.
         </p>
       )}
+
+      <Card className="p-4">
+        <h2 className="font-semibold">Resultado por ativo</h2>
+        {resultGroups.some((group) => group.rows.length > 0) ? (
+          <div className="mt-3 grid gap-5 sm:grid-cols-2">
+            {resultGroups.map((group) => group.rows.length > 0 && (
+              <div key={group.label}>
+                <h3 className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  {group.label}
+                </h3>
+                <ul className="mt-1 divide-y divide-neutral-100 dark:divide-neutral-800">
+                  {group.rows.map((row) => (
+                    <li key={row.id} className="flex justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0">
+                        <span className="block truncate">{row.name}</span>
+                        <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                          {row.detail}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 self-center text-right tabular-nums ${
+                        row.value === null
+                          ? "text-amber-700 dark:text-amber-400"
+                          : row.value < 0
+                            ? "text-red-600 dark:text-red-400"
+                            : row.value > 0
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : ""
+                      }`}>
+                        {row.value === null ? "Estimativa pendente" : brl(row.value)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+            Nenhum ativo cadastrado.
+          </p>
+        )}
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="p-4">
