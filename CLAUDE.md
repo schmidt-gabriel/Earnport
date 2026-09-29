@@ -143,8 +143,11 @@ the sidebar hides those selectors there.
 **Geral** (`/pf/geral`) is the PF landing page. Its modality card shows
 fixed-income invested principal. The combined current-value summary still sums
 the fixed-income estimated net value and the FIIs market value, while showing
-cash distributions separately. If a fixed-income position has no IPCA estimate, the combined
-current value is marked pending instead of showing a partial total.
+cash distributions separately. It also lists the invested principal in active
+daily-liquidity positions and the maturity dates of active positions redeemable
+only at maturity. Future applications and missing application dates are excluded.
+If a fixed-income position has no IPCA estimate, the combined current value is
+marked pending instead of showing a partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
 bought. Each record carries `amount` (valor aplicado), `applied_at` and
