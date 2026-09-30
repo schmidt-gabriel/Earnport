@@ -80,10 +80,11 @@ The old `FABE_MASTER_*` variables remain accepted during migration.
 
 ## Pessoa Física
 
-- **Geral** (`/pf/geral`): valor aplicado e valor atual de renda fixa e FIIs,
-  com o resultado detalhado por ativo e proventos recebidos em separado. Mostra o principal dos títulos com
-  liquidez diária disponível, além das próximas datas de resgate e seus
-  valores líquidos estimados no vencimento.
+- **Geral** (`/pf/geral`): o Valor atual soma o Valor aplicado ao saldo da
+  conta de investimentos, informado manualmente. O Resultado mostra a
+  variação estimada por ativo; proventos recebidos ficam em separado.
+  Também mostra o principal dos títulos com liquidez diária e as próximas
+  datas de resgate com seus valores líquidos estimados.
 - **Renda fixa** (`/pf`): CDB e LCI/LCA com taxa CDI, IPCA + taxa ou prefixada.
   O valor aplicado aparece em destaque. A estimativa de IPCA é informada no modal do investimento.
 - **FIIs** (`/pf/fiis`): informe manualmente ticker, cotas, preço médio,
