@@ -134,7 +134,7 @@ export default function PortfolioOverview() {
       <Card className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-semibold">Saldo da conta</h2>
+            <h2 className="font-semibold">Saldo da conta de investimentos</h2>
             <p className="mt-2 text-xl font-semibold tabular-nums">{brl(cashBalance)}</p>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Informado manualmente
@@ -243,7 +243,7 @@ export default function PortfolioOverview() {
       </div>
 
       {cashOpen && (
-        <Modal title="Saldo da conta" onClose={() => setCashOpen(false)}>
+        <Modal title="Saldo da conta de investimentos" onClose={() => setCashOpen(false)}>
           <form onSubmit={saveCash} className="space-y-4">
             <Field label="Saldo (R$)">
               <Input
