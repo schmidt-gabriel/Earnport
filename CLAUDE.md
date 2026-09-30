@@ -111,7 +111,8 @@ scheduled, paid, payment_type auto|manual),
 Pessoa Física (suffix `_invest`, see **Modalidades** below):
 `investments_invest` (name, broker, kind cdb|lci_lca, indexer cdi|ipca|fixed,
 rate_pct, amount, applied_at, liquidity daily|maturity|market, maturity),
-`settings_invest` (singleton: cdi_rate, optional ipca_rate estimate),
+`settings_invest` (singleton: cdi_rate, optional ipca_rate estimate, manually
+entered cash_balance),
 `fiis_invest` (ticker, quantity, average_price, current_price, quoted_at,
 broker), `fii_dividends_invest` (fii relation, payment_date, amount).
 The legacy `cdi_pct` field remains for old backup imports; new positions use
@@ -141,11 +142,11 @@ the sidebar hides those selectors there.
 ### Pessoa Física: a carteira
 
 **Geral** (`/pf/geral`) is the PF landing page. Its modality card shows
-fixed-income invested principal. The combined current-value summary still sums
-the fixed-income estimated net value and the FIIs market value, while showing
-cash distributions separately. The Result breakdown lists the estimated net
-gain of each fixed-income position and the price change of each FII, excluding
-cash distributions. It also lists the invested principal in active
+fixed-income invested principal. The "Valor atual" summary adds invested
+principal in fixed income and FIIs to the manually entered investment-account
+cash balance. The "Resultado" summary separately totals estimated fixed-income
+net gains and FII price changes. Cash distributions are shown separately. The
+Result breakdown lists each asset's contribution to that total. It also lists the invested principal in active
 daily-liquidity positions and the maturity dates and projected net values of
 active positions redeemable only at maturity. A missing IPCA reference leaves
 that projected value pending. Future applications and missing application dates are excluded.

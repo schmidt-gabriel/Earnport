@@ -1,12 +1,19 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card } from "../components/ui";
+import { Button, Card, Field, Input, Modal } from "../components/ui";
 import { useRates } from "../components/invest";
 import { fiiTotals, holdingChange, type FiiDividend, type FiiHolding } from "../lib/fiis";
 import { portfolioTotals, positions, type Investment } from "../lib/invest";
 import { brl, fmtDate } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
 
+type InvestSettings = { id: string; cash_balance?: number };
+
 export default function PortfolioOverview() {
+  const settings = useCollection<InvestSettings>("settings_invest", { sort: "-updated" });
+  const [cashOpen, setCashOpen] = useState(false);
+  const [cashInput, setCashInput] = useState("");
+  const [cashError, setCashError] = useState("");
   const investments = useCollection<Investment>("investments_invest", { sort: "name" });
   const fiis = useCollection<FiiHolding>("fiis_invest", { sort: "ticker" });
   const dividends = useCollection<FiiDividend>("fii_dividends_invest", { sort: "-payment_date" });
@@ -53,10 +60,35 @@ export default function PortfolioOverview() {
     },
   ];
   const applied = fixed.amount + variable.cost;
-  const current = fixed.net + variable.value;
+  const cashBalance = settings.list.data?.[0]?.cash_balance ?? 0;
+  const current = applied + cashBalance;
+  const result = fixed.netGain + variable.change;
   const incomplete = fixed.incomplete;
-  const failed = investments.list.isError || fiis.list.isError || dividends.list.isError || ratesError;
-  const loading = investments.list.isPending || fiis.list.isPending || dividends.list.isPending || !ratesReady;
+  const failed = investments.list.isError || fiis.list.isError || dividends.list.isError || settings.list.isError || ratesError;
+  const loading = investments.list.isPending || fiis.list.isPending || dividends.list.isPending || settings.list.isPending || !ratesReady;
+
+  function openCash() {
+    setCashInput(String(cashBalance));
+    setCashError("");
+    setCashOpen(true);
+  }
+
+  async function saveCash(e: React.FormEvent) {
+    e.preventDefault();
+    const value = Number(cashInput);
+    if (!Number.isFinite(value) || value < 0) {
+      setCashError("Informe um saldo válido.");
+      return;
+    }
+    try {
+      const record = settings.list.data?.[0];
+      if (record) await settings.update.mutateAsync({ id: record.id, data: { cash_balance: value } });
+      else await settings.create.mutateAsync({ cdi_rate: cdi, cash_balance: value });
+      setCashOpen(false);
+    } catch {
+      setCashError("Não foi possível salvar o saldo.");
+    }
+  }
 
   if (failed) {
     return <p className="text-sm text-red-600">Não foi possível carregar a carteira.</p>;
@@ -67,9 +99,9 @@ export default function PortfolioOverview() {
   }
 
   const summary = [
-    { label: "Valor atual", value: incomplete ? "Estimativa pendente" : brl(current) },
+    { label: "Valor atual", value: brl(current), detail: "Aplicado + saldo" },
     { label: "Valor aplicado", value: brl(applied) },
-    { label: "Resultado", value: incomplete ? "Estimativa pendente" : brl(current - applied) },
+    { label: "Resultado", value: incomplete ? "Estimativa pendente" : brl(result) },
     { label: "Proventos recebidos", value: brl(variable.dividends) },
   ];
 
@@ -87,6 +119,9 @@ export default function PortfolioOverview() {
           <Card key={item.label} className="p-4">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">{item.label}</p>
             <p className="mt-1 text-lg font-semibold tabular-nums">{item.value}</p>
+            {item.detail && (
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{item.detail}</p>
+            )}
           </Card>
         ))}
       </div>
@@ -95,6 +130,19 @@ export default function PortfolioOverview() {
           Informe o IPCA estimado em Renda fixa para completar a estimativa.
         </p>
       )}
+
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">Saldo da conta</h2>
+            <p className="mt-2 text-xl font-semibold tabular-nums">{brl(cashBalance)}</p>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Informado manualmente
+            </p>
+          </div>
+          <Button variant="ghost" onClick={openCash}>Editar</Button>
+        </div>
+      </Card>
 
       <Card className="p-4">
         <h2 className="font-semibold">Resultado por ativo</h2>
@@ -193,6 +241,28 @@ export default function PortfolioOverview() {
           )}
         </Card>
       </div>
+
+      {cashOpen && (
+        <Modal title="Saldo da conta" onClose={() => setCashOpen(false)}>
+          <form onSubmit={saveCash} className="space-y-4">
+            <Field label="Saldo (R$)">
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                required
+                value={cashInput}
+                onChange={(e) => setCashInput(e.target.value)}
+              />
+            </Field>
+            {cashError && <p role="alert" className="text-sm text-red-600">{cashError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setCashOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={settings.update.isPending || settings.create.isPending}>Salvar</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Por modalidade</h2>
