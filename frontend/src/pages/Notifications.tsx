@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ClientResponseError } from "pocketbase";
 import { DEFAULT_CDI } from "../lib/invest";
 import { pb } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
@@ -10,9 +11,9 @@ export default function Notifications() {
   const settings = useCollection<InvestSettings>("settings_invest", { sort: "-updated" });
   const record = settings.list.data?.[0];
   const [url, setUrl] = useState("");
-  const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // Outcome of the last save or test, shown beside the buttons.
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     setUrl(record?.notification_webhook_url ?? "");
@@ -21,24 +22,32 @@ export default function Notifications() {
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     const notificationWebhookURL = url.trim();
-    if (record) {
-      await settings.update.mutateAsync({
-        id: record.id,
-        data: { notification_webhook_url: notificationWebhookURL },
-      });
-    } else {
-      await settings.create.mutateAsync({
-        cdi_rate: DEFAULT_CDI,
-        notification_webhook_url: notificationWebhookURL,
-      });
+    setStatus(null);
+    try {
+      if (record) {
+        await settings.update.mutateAsync({
+          id: record.id,
+          data: { notification_webhook_url: notificationWebhookURL },
+        });
+      } else {
+        await settings.create.mutateAsync({
+          cdi_rate: DEFAULT_CDI,
+          notification_webhook_url: notificationWebhookURL,
+        });
+      }
+      setStatus({ ok: true, text: "Salvo" });
+    } catch (err) {
+      // PocketBase puts field validation (e.g. an invalid URL) under response.data.
+      const e = err as ClientResponseError;
+      const reason = e.response?.data?.notification_webhook_url?.message ?? e.message;
+      setStatus({ ok: false, text: `Não foi possível salvar: ${reason}` });
     }
-    setSaved(true);
   };
 
   // Tests the URL as typed, so it can be checked before saving.
   const test = async () => {
     setTesting(true);
-    setTestResult(null);
+    setStatus(null);
     try {
       const res = await fetch("/api/invest/notifications/test", {
         method: "POST",
@@ -46,19 +55,20 @@ export default function Notifications() {
         body: JSON.stringify({ url: url.trim() }),
       });
       if (res.ok) {
-        setTestResult({ ok: true, text: "Teste enviado" });
+        setStatus({ ok: true, text: "Teste enviado" });
       } else {
         const data = (await res.json().catch(() => null)) as { message?: string } | null;
-        setTestResult({ ok: false, text: `Falhou: ${data?.message ?? res.statusText}` });
+        setStatus({ ok: false, text: `Falhou: ${data?.message ?? res.statusText}` });
       }
     } catch {
-      setTestResult({ ok: false, text: "Falhou: sem resposta do servidor" });
+      setStatus({ ok: false, text: "Falhou: sem resposta do servidor" });
     } finally {
       setTesting(false);
     }
   };
 
-  const busy = settings.list.isPending || settings.update.isPending || settings.create.isPending;
+  const saving = settings.update.isPending || settings.create.isPending;
+  const busy = settings.list.isPending || saving;
   const configured = Boolean(record?.notification_webhook_url);
 
   return (
@@ -80,8 +90,7 @@ export default function Notifications() {
               value={url}
               onChange={(event) => {
                 setUrl(event.target.value);
-                setSaved(false);
-                setTestResult(null);
+                setStatus(null);
               }}
               disabled={busy}
             />
@@ -94,18 +103,17 @@ export default function Notifications() {
           </p>
 
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={busy}>Salvar</Button>
+            <Button type="submit" disabled={busy}>
+              {saving ? "Salvando…" : "Salvar"}
+            </Button>
             <Button type="button" variant="ghost" onClick={test} disabled={busy || testing || !url.trim()}>
               {testing ? "Testando…" : "Testar"}
             </Button>
-            {saved && !testResult && (
-              <span className="text-sm text-emerald-700 dark:text-emerald-400">Salvo</span>
-            )}
-            {testResult && (
+            {status && (
               <span
-                className={`text-sm ${testResult.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                className={`text-sm ${status.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
               >
-                {testResult.text}
+                {status.text}
               </span>
             )}
           </div>
