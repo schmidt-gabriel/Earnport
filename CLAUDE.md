@@ -37,6 +37,7 @@ backend/
       tax_periods.go            # quarterly assessment + auto-lock state machine
       export.go                 # /api/export/* and /api/import/backup
       autoregister.go           # auto-debited recurring services post their expense
+      notify.go                 # investment webhook: maturity notices
 frontend/
   src/pages/                    # Dashboard, Remittances, Imports, Expenses,
                                 # ProfitDistributions, Taxes, Config, Export, Login,
@@ -112,7 +113,9 @@ Pessoa Física (suffix `_invest`, see **Modalidades** below):
 `investments_invest` (name, broker, kind cdb|lci_lca, indexer cdi|ipca|fixed,
 rate_pct, amount, applied_at, liquidity daily|maturity|market, maturity),
 `settings_invest` (singleton: cdi_rate, optional ipca_rate estimate, manually
-entered cash_balance),
+entered cash_balance, notification_webhook_url),
+`notifications_invest` (key unique, event, sent_at: log of webhook notices
+already delivered; operational, left out of exports),
 `fiis_invest` (ticker, quantity, average_price, current_price, quoted_at,
 broker), `fii_dividends_invest` (fii relation, payment_date, amount).
 The legacy `cdi_pct` field remains for old backup imports; new positions use
@@ -278,8 +281,18 @@ per fact. No tooltips, no educational paragraphs. Percentages go through `pct()`
   current month once `exp_day` is reached, skipping any already recorded. Only the current month is handled. The same
   routine also marks any **scheduled expense** with `payment_type=auto` (a "despesa a pagar"
   the user set to automatic) as paid once its date is reached (`autoPayScheduledAutoExpenses`).
-  Both can be triggered manually via `POST /api/maintenance/auto-register` (Config → Rotinas →
-  "Rodar agora"), which returns `{created, paid}`.
+  The same pass also sends **maturity notices** for PF fixed income
+  (`notifyUpcomingMaturities` in `api/notify.go`): when `settings_invest.notification_webhook_url`
+  is set, every position with `amount > 0` and a `maturity` gets a JSON POST
+  (`event: "investment.maturity"`, a ready `text`, `days_until_maturity`, `investment`)
+  at 7, 3 and 1 days before and on the day. Each notice is logged in `notifications_invest`
+  under `maturity:<id>:<date>:<threshold>`, so it goes out once; a missed day falls into the
+  next window, editing the maturity re-arms them, and a failed POST is not logged, so the
+  next run retries it. Configurações → Notificações has a "Testar" button that POSTs
+  `{event: "test", text}` to the URL as typed (saved or not) via
+  `POST /api/invest/notifications/test {url}`; it is not logged.
+  All of it can be triggered manually via `POST /api/maintenance/auto-register` (Config → Rotinas →
+  "Rodar agora"), which returns `{created, paid, notified}`.
 - **Despesa: recebedor x categoria.** `expenses.payee` ("Recebedor") is who was paid
   ("Unimed"); `category` is what groups it ("Health insurance") and is what the Dashboard
   breakdown and the recurring-service matching aggregate on. Both are free text and the

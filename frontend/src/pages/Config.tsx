@@ -5,12 +5,14 @@ import RecurringServices from "./RecurringServices";
 import Export from "./Export";
 import Account from "./Account";
 import Maintenance from "./Maintenance";
+import Notifications from "./Notifications";
 
 const TABS = [
   { key: "clientes", label: "Clientes" },
   { key: "plataformas", label: "Plataformas" },
   { key: "vencimentos", label: "Vencimentos" },
   { key: "rotinas", label: "Rotinas" },
+  { key: "notificacoes", label: "Notificações" },
   { key: "dados", label: "Dados" },
   { key: "usuario", label: "Usuário" },
 ] as const;
@@ -22,7 +24,7 @@ export default function Config() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Configurações</h1>
 
-      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="flex gap-1 overflow-x-auto border-b border-neutral-200 dark:border-neutral-800">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -42,6 +44,7 @@ export default function Config() {
       {tab === "plataformas" && <Platforms />}
       {tab === "vencimentos" && <RecurringServices />}
       {tab === "rotinas" && <Maintenance />}
+      {tab === "notificacoes" && <Notifications />}
       {tab === "dados" && <Export />}
       {tab === "usuario" && <Account />}
     </div>
