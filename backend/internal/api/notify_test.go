@@ -200,3 +200,32 @@ func TestNotifyUpcomingMaturitiesRetriesFailedDelivery(t *testing.T) {
 		t.Errorf("retry sent=%d err=%v, want 1 delivered", sent, err)
 	}
 }
+
+func TestSendTestNotice(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+	}))
+	defer srv.Close()
+
+	if err := sendTestNotice(srv.Client(), srv.URL); err != nil {
+		t.Fatal(err)
+	}
+	if got["event"] != "test" || got["text"] == "" {
+		t.Errorf("unexpected payload %v", got)
+	}
+}
+
+func TestSendTestNoticeReportsFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	if err := sendTestNotice(srv.Client(), srv.URL); err == nil {
+		t.Error("expected an error from a webhook answering 404")
+	}
+	if err := sendTestNotice(srv.Client(), "ftp://example.com"); err == nil {
+		t.Error("expected an error for a non-http URL")
+	}
+}

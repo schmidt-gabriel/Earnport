@@ -288,7 +288,9 @@ per fact. No tooltips, no educational paragraphs. Percentages go through `pct()`
   at 7, 3 and 1 days before and on the day. Each notice is logged in `notifications_invest`
   under `maturity:<id>:<date>:<threshold>`, so it goes out once; a missed day falls into the
   next window, editing the maturity re-arms them, and a failed POST is not logged, so the
-  next run retries it.
+  next run retries it. Configurações → Notificações has a "Testar" button that POSTs
+  `{event: "test", text}` to the URL as typed (saved or not) via
+  `POST /api/invest/notifications/test {url}`; it is not logged.
   All of it can be triggered manually via `POST /api/maintenance/auto-register` (Config → Rotinas →
   "Rodar agora"), which returns `{created, paid, notified}`.
 - **Despesa: recebedor x categoria.** `expenses.payee` ("Recebedor") is who was paid

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,22 @@ func Register(app core.App) {
 					return apis.NewApiError(http.StatusBadGateway, "maturity notices failed", err)
 				}
 				return re.JSON(http.StatusOK, map[string]any{"created": created, "paid": paid, "notified": notified})
+			}).Bind(apis.RequireAuth())
+
+			// POST /api/invest/notifications/test {url}
+			// Sends a sample notice to the given webhook URL (the one typed in
+			// Notificações, saved or not) and reports whether it was accepted.
+			e.Router.POST("/api/invest/notifications/test", func(re *core.RequestEvent) error {
+				var body struct {
+					URL string `json:"url"`
+				}
+				if err := json.NewDecoder(re.Request.Body).Decode(&body); err != nil {
+					return apis.NewBadRequestError("invalid body", err)
+				}
+				if err := sendTestNotice(webhookClient, strings.TrimSpace(body.URL)); err != nil {
+					return apis.NewApiError(http.StatusBadGateway, err.Error(), err)
+				}
+				return re.NoContent(http.StatusNoContent)
 			}).Bind(apis.RequireAuth())
 
 			// GET /api/fx/usd-brl?date=YYYY-MM-DD (date optional => latest)

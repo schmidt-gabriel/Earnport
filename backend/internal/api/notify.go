@@ -182,3 +182,15 @@ func postWebhook(client *http.Client, url string, body any) error {
 	}
 	return nil
 }
+
+// sendTestNotice POSTs a sample notice so the user can check the webhook from
+// the Notificações page, before or after saving the URL. It is not logged.
+func sendTestNotice(client *http.Client, url string) error {
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return errors.New("webhook URL must be http(s)")
+	}
+	return postWebhook(client, url, map[string]string{
+		"event": "test",
+		"text":  "Teste do webhook do Earnport: os avisos da carteira chegarão aqui.",
+	})
+}
