@@ -44,10 +44,13 @@ func Register(app core.App) {
 	fxClient := fx.NewClient()
 	latestFX := &quoteCache{}
 
+	webhookClient := &http.Client{Timeout: 10 * time.Second}
+
 	// Auto-debited items record themselves on their due date: recurring services
 	// post their monthly expense, and expenses the user scheduled as automatic
-	// get marked paid. Catch up once at startup, then check daily.
-	runAutoRegister := func() (created int, paid int) {
+	// get marked paid. The same pass announces fixed-income positions close to
+	// maturity on the investment webhook. Catch up once at startup, then check daily.
+	runAutoRegister := func() (created int, paid int, notified int) {
 		var err error
 		if created, err = autoRegisterAutoServices(app); err != nil {
 			app.Logger().Warn("auto-register services failed", "err", err)
@@ -55,7 +58,10 @@ func Register(app core.App) {
 		if paid, err = autoPayScheduledAutoExpenses(app); err != nil {
 			app.Logger().Warn("auto-pay expenses failed", "err", err)
 		}
-		return created, paid
+		if notified, err = notifyUpcomingMaturities(app, webhookClient, time.Now()); err != nil {
+			app.Logger().Warn("maturity notices failed", "err", err)
+		}
+		return created, paid, notified
 	}
 	app.OnServe().BindFunc(func(e *core.ServeEvent) error {
 		runAutoRegister()
@@ -83,8 +89,9 @@ func Register(app core.App) {
 
 			// POST /api/maintenance/auto-register
 			// Runs the auto-register routine on demand (same as the daily cron):
-			// posts expenses for any due auto-debited service and marks due
-			// scheduled auto expenses as paid. Returns {created, paid}.
+			// posts expenses for any due auto-debited service, marks due
+			// scheduled auto expenses as paid and sends pending maturity notices.
+			// Returns {created, paid, notified}.
 			e.Router.POST("/api/maintenance/auto-register", func(re *core.RequestEvent) error {
 				created, err := autoRegisterAutoServices(app)
 				if err != nil {
@@ -94,7 +101,11 @@ func Register(app core.App) {
 				if err != nil {
 					return apis.NewApiError(http.StatusInternalServerError, "auto-pay failed", err)
 				}
-				return re.JSON(http.StatusOK, map[string]any{"created": created, "paid": paid})
+				notified, err := notifyUpcomingMaturities(app, webhookClient, time.Now())
+				if err != nil {
+					return apis.NewApiError(http.StatusBadGateway, "maturity notices failed", err)
+				}
+				return re.JSON(http.StatusOK, map[string]any{"created": created, "paid": paid, "notified": notified})
 			}).Bind(apis.RequireAuth())
 
 			// GET /api/fx/usd-brl?date=YYYY-MM-DD (date optional => latest)

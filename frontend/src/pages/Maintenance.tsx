@@ -22,16 +22,17 @@ export default function Maintenance() {
         headers: { Authorization: pb.authStore.token },
       });
       if (!res.ok) throw new Error();
-      const data = (await res.json()) as { created: number; paid: number };
+      const data = (await res.json()) as { created: number; paid: number; notified: number };
       // Refresh expenses so any newly posted/paid ones show up immediately.
       qc.invalidateQueries({ queryKey: ["expenses"] });
       const parts: string[] = [];
       if (data.created > 0) parts.push(`${data.created} despesa(s) lançada(s)`);
       if (data.paid > 0) parts.push(`${data.paid} pagamento(s) automático(s) quitado(s)`);
+      if (data.notified > 0) parts.push(`${data.notified} aviso(s) de vencimento enviado(s)`);
       setMsg(
         parts.length > 0
           ? `${parts.join(" · ")}.`
-          : "Nada a fazer: nenhum pagamento automático vencido em aberto.",
+          : "Nada a fazer: nenhum pagamento automático vencido em aberto nem aviso pendente.",
       );
     } catch {
       setError("Não foi possível rodar a rotina.");
@@ -53,8 +54,9 @@ export default function Maintenance() {
             Pagamentos automáticos
           </p>
           <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
-            Lança as despesas dos serviços marcados como automáticos e quita as despesas a
-            pagar automáticas cujo vencimento já chegou.
+            Lança as despesas dos serviços marcados como automáticos, quita as despesas a
+            pagar automáticas cujo vencimento já chegou e envia os avisos de vencimento dos
+            investimentos ao webhook.
           </p>
         </div>
         <Button onClick={runAutoRegister} disabled={running}>

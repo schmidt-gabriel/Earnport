@@ -74,7 +74,7 @@ export default function Notifications() {
       </Card>
 
       <p className="text-sm text-neutral-500 dark:text-neutral-400">
-        Avisos de vencimento serão os primeiros envios. Novos eventos da carteira poderão ser adicionados a este mesmo webhook.
+        Títulos com vencimento são avisados 7, 3 e 1 dia antes e no dia, uma vez cada, pela rotina diária das 06:00.
       </p>
     </div>
   );
