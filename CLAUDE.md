@@ -112,7 +112,7 @@ Pessoa Física (suffix `_invest`, see **Modalidades** below):
 `investments_invest` (name, broker, kind cdb|lci_lca, indexer cdi|ipca|fixed,
 rate_pct, amount, applied_at, liquidity daily|maturity|market, maturity),
 `settings_invest` (singleton: cdi_rate, optional ipca_rate estimate, manually
-entered cash_balance),
+entered cash_balance, notification_webhook_url),
 `fiis_invest` (ticker, quantity, average_price, current_price, quoted_at,
 broker), `fii_dividends_invest` (fii relation, payment_date, amount).
 The legacy `cdi_pct` field remains for old backup imports; new positions use
