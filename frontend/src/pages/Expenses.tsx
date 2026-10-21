@@ -5,12 +5,13 @@ import { MONTHS, useYear } from "../lib/year";
 import type { Expense, RecurringService } from "../lib/types";
 import {
   EXPENSE_CATEGORIES,
+  expenseIsUsd,
   expenseLabel,
   expenseMatchesService,
   expensePaid,
   paymentLabel,
 } from "../lib/types";
-import { brl, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
+import { brl, usd, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
 import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
 
 const empty = {
@@ -18,9 +19,13 @@ const empty = {
   payee: "",
   category: "",
   amount: "",
+  currency: "BRL",
   notes: "",
   payment_type: "manual",
 };
+
+// Amount in the expense's own currency.
+const fmtAmount = (x: Expense) => (expenseIsUsd(x) ? usd(x.amount) : brl(x.amount));
 
 export default function Expenses() {
   const { list, create, update, remove } = useCollection<Expense>("expenses", {
@@ -68,6 +73,7 @@ export default function Expenses() {
       payee: x.payee ?? "",
       category: x.category,
       amount: String(x.amount),
+      currency: expenseIsUsd(x) ? "USD" : "BRL",
       notes: x.notes ?? "",
       payment_type: x.payment_type || "manual",
     });
@@ -90,6 +96,8 @@ export default function Expenses() {
       payee: u.payee,
       category: u.category,
       amount: u.amount ? String(u.amount) : "",
+      // Recurring services are paid in BRL.
+      currency: "BRL",
       notes: u.notes,
       payment_type: u.payment_type,
     });
@@ -104,6 +112,7 @@ export default function Expenses() {
       payee: form.payee,
       category: form.category,
       amount: Number(form.amount),
+      currency: form.currency === "USD" ? "USD" : "BRL",
       notes: form.notes,
       payment_type: form.payment_type,
       // Once scheduled, stay scheduled so a paid one still shows as "pago"
@@ -145,10 +154,15 @@ export default function Expenses() {
     }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  const total = rows.filter(expensePaid).reduce((s, x) => s + x.amount, 0);
+  // USD expenses never mix into the BRL totals; they get their own lines.
+  const brlRows = rows.filter((x) => !expenseIsUsd(x));
+  const usdRows = rows.filter(expenseIsUsd);
+  const total = brlRows.filter(expensePaid).reduce((s, x) => s + x.amount, 0);
   const pendingTotal =
-    rows.filter((x) => !expensePaid(x)).reduce((s, x) => s + x.amount, 0) +
+    brlRows.filter((x) => !expensePaid(x)).reduce((s, x) => s + x.amount, 0) +
     upcoming.reduce((s, u) => s + u.amount, 0);
+  const usdTotal = usdRows.filter(expensePaid).reduce((s, x) => s + x.amount, 0);
+  const usdPending = usdRows.filter((x) => !expensePaid(x)).reduce((s, x) => s + x.amount, 0);
 
   // Both fields are free text. Payees suggest the recurring services (a service
   // is marked paid by an expense naming it as payee) plus the payees already in
@@ -242,7 +256,7 @@ export default function Expenses() {
                 <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                   {paymentLabel(x.payment_type)}
                 </td>
-                <td className="px-4 py-3 text-right">{brl(x.amount)}</td>
+                <td className="px-4 py-3 text-right">{fmtAmount(x)}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <Button variant="ghost" onClick={() => openEdit(x)}>
                     Editar
@@ -275,6 +289,24 @@ export default function Expenses() {
                   A pagar
                 </td>
                 <td className="px-4 py-3 text-right">{brl(pendingTotal)}</td>
+                <td />
+              </tr>
+            )}
+            {usdRows.length > 0 && (
+              <tr className="border-t border-neutral-200 dark:border-neutral-700">
+                <td className="px-4 py-3" colSpan={5}>
+                  Total em USD
+                </td>
+                <td className="px-4 py-3 text-right">{usd(usdTotal)}</td>
+                <td />
+              </tr>
+            )}
+            {usdPending > 0 && (
+              <tr className="border-t border-neutral-200 text-amber-600 dark:border-neutral-700 dark:text-amber-400">
+                <td className="px-4 py-3" colSpan={5}>
+                  A pagar em USD
+                </td>
+                <td className="px-4 py-3 text-right">{usd(usdPending)}</td>
                 <td />
               </tr>
             )}
@@ -323,7 +355,16 @@ export default function Expenses() {
                 ))}
               </datalist>
             </Field>
-            <Field label="Valor (BRL)">
+            <Field label="Moeda">
+              <Select
+                value={form.currency}
+                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+              >
+                <option value="BRL">BRL</option>
+                <option value="USD">USD (saldo a trazer)</option>
+              </Select>
+            </Field>
+            <Field label={`Valor (${form.currency === "USD" ? "USD" : "BRL"})`}>
               <Input
                 type="number"
                 step="0.01"

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCollection } from "../lib/useCollection";
 import { useYear } from "../lib/year";
 import type { Client, Expense, ImportRecord, ProfitDistribution, Remittance } from "../lib/types";
-import { expensePaid, IRRF_MONTHLY_LIMIT } from "../lib/types";
+import { expenseCountsInBrl, IRRF_MONTHLY_LIMIT } from "../lib/types";
 import { pb, brl, usd, fmtDate } from "../lib/pb";
 import {
   DistributionMeter,
@@ -88,7 +88,7 @@ export default function Dashboard() {
 
   const yearImports = inYear(imports.list.data, (r) => r.convert_day);
   const yearRemittances = inYear(remittances.list.data, (r) => r.pay_day);
-  const yearExpenses = inYear((expenses.list.data ?? []).filter(expensePaid), (r) => r.date);
+  const yearExpenses = inYear((expenses.list.data ?? []).filter(expenseCountsInBrl), (r) => r.date);
   const yearDist = inYear(dist.list.data, (r) => r.month);
 
   // One bucket per month, filled by whichever collection feeds the chart.
