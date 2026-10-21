@@ -57,6 +57,10 @@ export interface Expense extends BaseRecord {
   paid?: boolean;
   // Auto-debited vs paid manually. Empty (legacy records) is treated as manual.
   payment_type?: "auto" | "manual";
+  // Currency of `amount`. Empty (legacy records) means BRL. A USD expense is
+  // paid from USD received and not yet converted: it stays out of every BRL
+  // total and only reduces the USD balance ("A trazer").
+  currency?: "BRL" | "USD" | "";
 }
 
 // Human label for a payment_type; empty defaults to manual.
@@ -65,6 +69,12 @@ export const paymentLabel = (t?: "auto" | "manual") =>
 
 // A regular expense counts as paid; a scheduled one only after being marked.
 export const expensePaid = (e: Expense) => !e.scheduled || !!e.paid;
+
+// Paid from the USD balance instead of in BRL.
+export const expenseIsUsd = (e: Expense) => e.currency === "USD";
+
+// A paid expense that belongs in the BRL totals (meters, KPIs, charts).
+export const expenseCountsInBrl = (e: Expense) => expensePaid(e) && !expenseIsUsd(e);
 
 // How an expense is labelled: its payee, or the category for records saved
 // before expenses had a payee of their own.

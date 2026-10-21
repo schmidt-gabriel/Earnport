@@ -3,6 +3,8 @@ import { useCollection } from "../lib/useCollection";
 import { MONTHS, useYear } from "../lib/year";
 import type { Client, Expense, ImportRecord, ProfitDistribution, RecurringService, Remittance } from "../lib/types";
 import {
+  expenseCountsInBrl,
+  expenseIsUsd,
   expenseMatchesService,
   expensePaid,
   IRRF_MONTHLY_LIMIT,
@@ -158,16 +160,24 @@ export function YearSummary() {
   const bruto = sum(imports.list.data, (r) => r.amount_brl, year, (r) => r.convert_day);
   const importedUsd = sum(imports.list.data, (r) => r.amount_usd, year, (r) => r.convert_day);
   const receivedUsd = sum(remittances.list.data, (r) => r.amount_usd, year, (r) => r.pay_day);
-  // Scheduled expenses only count once paid.
+  // Scheduled expenses only count once paid; USD ones stay out of BRL totals.
   const despesas = sum(
-    (expenses.list.data ?? []).filter(expensePaid),
+    (expenses.list.data ?? []).filter(expenseCountsInBrl),
+    (r) => r.amount,
+    year,
+    (r) => r.date,
+  );
+
+  // Paid USD expenses come straight out of the USD not yet converted.
+  const spentUsd = sum(
+    (expenses.list.data ?? []).filter((e) => expensePaid(e) && expenseIsUsd(e)),
     (r) => r.amount,
     year,
     (r) => r.date,
   );
 
   const liquido = bruto - despesas;
-  const toBring = receivedUsd - importedUsd;
+  const toBring = receivedUsd - importedUsd - spentUsd;
   const rate = fx.data?.rate ?? 0;
   // The market quote is preferred, but when AwesomeAPI is unreachable the
   // effective rate of the year's own imports (BRL received ÷ USD sent, fees
@@ -301,7 +311,7 @@ export function ExpensesMeter() {
   const monthName = useMonthLabel();
   const expenses = useCollection<Expense>("expenses", { sort: "-date" });
   const spent = sumMonth(
-    (expenses.list.data ?? []).filter(expensePaid),
+    (expenses.list.data ?? []).filter(expenseCountsInBrl),
     (r) => r.amount,
     ym,
     (r) => r.date,
@@ -366,6 +376,7 @@ export function UpcomingPayments() {
       name: s.name,
       day: s.exp_day,
       amount: 0,
+      usd: false,
       paid: paidThisMonth(s.name),
       auto: s.payment_type === "auto",
     })),
@@ -374,6 +385,7 @@ export function UpcomingPayments() {
       name: e.payee?.trim() || e.notes || e.category,
       day: Number(e.date.slice(8, 10)),
       amount: e.amount,
+      usd: expenseIsUsd(e),
       paid: !!e.paid,
       auto: false,
     })),
@@ -431,7 +443,7 @@ export function UpcomingPayments() {
                 {it.name}
                 {it.amount > 0 && (
                   <span className="ml-1.5 text-xs font-normal text-neutral-400 dark:text-neutral-500">
-                    {brl(it.amount)}
+                    {it.usd ? usd(it.amount) : brl(it.amount)}
                   </span>
                 )}
                 {it.auto && (

@@ -104,7 +104,7 @@ curl -s -X POST "http://localhost:8090/api/import/backup?mode=overwrite" \
 pay_frequency monthly|weekly, active), `platforms` (name, active),
 `remittances` (client→, platform, amount_usd, pay_day), `imports` (platform, amount_usd,
 convert_day, rate, amount_brl), `expenses` (date, payee, category free text, amount, notes,
-scheduled, paid, payment_type auto|manual),
+scheduled, paid, payment_type auto|manual, currency BRL|USD),
 `recurring_services` (name, category, exp_day, default_amount, payment_type auto|manual),
 `profit_distributions` (month, amount, irrf),
 `tax_periods` (year, quarter, snapshot fields, locked), `settings` (singleton, tax params).
@@ -298,6 +298,17 @@ per fact. No tooltips, no educational paragraphs. Percentages go through `pct()`
   breakdown and the recurring-service matching aggregate on. Both are free text and the
   form suggests what is already in the data. `payee` is optional: records saved before it
   existed show the category as their label (`expenseLabel` in `lib/types.ts`).
+- **Despesa em USD:** `expenses.currency` is `BRL` (empty on old records) or `USD`, and
+  `amount` is in that currency. A USD expense is paid straight from USD received and not
+  yet converted: it never enters a BRL total (notas, faturamento, the R$50k meter, tax
+  base, the Despesas KPI/meter/charts or the Despesas page BRL total), and once paid it
+  only reduces the Dashboard "A trazer" (received USD - imported USD - paid USD expenses
+  of the year). BRL totals filter with `expenseCountsInBrl` (`lib/types.ts`); the
+  Despesas page shows USD rows with `usd()` and totals them on their own footer lines.
+  Expenses the backend auto-posts for recurring services (`autoRegisterAutoServices`)
+  have an empty currency, i.e. BRL; "Registrar" in Despesas only defaults Moeda to BRL
+  and the user can change it. Recurring-service matching (`expenseMatchesService`,
+  autoregister) ignores currency, so a USD expense with the service's payee marks it paid.
 - **Future expenses:** an expense created as "a pagar" gets `scheduled=true` and its
   `date` is the due date; it shows in the Dashboard "Próximos pagamentos" card and is
   excluded from expense totals until `paid=true`. `scheduled` stays true after payment
