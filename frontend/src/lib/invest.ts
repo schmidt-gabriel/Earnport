@@ -9,8 +9,9 @@
 
 import type { BaseRecord } from "./types";
 
-export type InvestKind = "cdb" | "lci_lca";
-export type Indexer = "cdi" | "ipca" | "fixed";
+export type InvestKind = "cdb" | "lci_lca" | "tesouro";
+/** `selic` only pairs with kind `tesouro`; `cdi` never does (the form enforces it). */
+export type Indexer = "cdi" | "ipca" | "fixed" | "selic";
 export type Liquidity = "daily" | "maturity" | "market";
 
 export interface Investment extends BaseRecord {
@@ -18,7 +19,7 @@ export interface Investment extends BaseRecord {
   kind: InvestKind;
   /** Empty on an older backup means CDI. */
   indexer?: Indexer;
-  /** CDI: % do CDI; IPCA: spread a.a.; fixed: taxa a.a. */
+  /** CDI: % do CDI; IPCA and Selic: spread a.a.; fixed: taxa a.a. */
   rate_pct?: number;
   /** Legacy CDI rate kept for older backups. */
   cdi_pct?: number;
@@ -37,7 +38,13 @@ export interface Investment extends BaseRecord {
 /** CDI usado enquanto o singleton `settings_invest` não tem um valor. */
 export const DEFAULT_CDI = 13.9;
 
-export const kindLabel = (k: InvestKind) => (k === "cdb" ? "CDB" : "LCI/LCA");
+export const kindLabel = (k: InvestKind) =>
+  k === "cdb" ? "CDB" : k === "tesouro" ? "Tesouro" : "LCI/LCA";
+/** Indexers the form offers for each kind. The first one is the default. */
+export const indexersFor = (k: InvestKind): Indexer[] =>
+  k === "tesouro" ? ["selic", "ipca", "fixed"] : ["cdi", "ipca", "fixed"];
+/** LCI/LCA are exempt; CDB and Tesouro Direto pay the regressive IR. */
+export const isTaxed = (k: InvestKind) => k !== "lci_lca";
 export const indexerOf = (inv: Investment): Indexer => inv.indexer || "cdi";
 export const contractedRateOf = (inv: Investment) =>
   inv.indexer ? (inv.rate_pct ?? 0) : (inv.cdi_pct ?? inv.rate_pct ?? 0);
@@ -45,10 +52,11 @@ export const rateLabel = (inv: Investment) => {
   const indexer = indexerOf(inv);
   const rate = contractedRateOf(inv).toLocaleString("pt-BR", {
     minimumFractionDigits: indexer === "fixed" ? 2 : 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: indexer === "selic" ? 4 : 2,
   });
   switch (indexer) {
     case "ipca": return `IPCA + ${rate}% a.a.`;
+    case "selic": return `Selic + ${rate}% a.a.`;
     case "fixed": return `${rate}% a.a. prefixado`;
     default: return `${rate}% do CDI`;
   }
@@ -81,6 +89,38 @@ export const irRate = (calendarDays: number) =>
   IR_BRACKETS.find((b) => calendarDays <= b.upTo)!.rate;
 
 // ---------------------------------------------------------------------------
+// Taxa de custódia B3 (Tesouro Direto)
+// ---------------------------------------------------------------------------
+
+/** Taxa de custódia da B3 sobre títulos do Tesouro Direto: 0,20% a.a. */
+export const TESOURO_CUSTODY_RATE = 0.002;
+/** Parcela do Tesouro Selic isenta da custódia, R$. */
+export const TESOURO_SELIC_CUSTODY_EXEMPT = 10_000;
+
+/**
+ * Custódia acumulada de um título do Tesouro, cobrada pro rata por dias
+ * corridos (dias/365) sobre o valor da posição.
+ *
+ * Approximation, kept simple on purpose: the B3 charges on the daily position
+ * value, while here the base is the average of the principal and the gross
+ * value at the date (a straight line between the two). The Tesouro Selic
+ * exemption (first R$10.000) is applied per position, whereas the B3 applies
+ * it to the investor's whole Tesouro Selic balance.
+ */
+export function tesouroCustody(
+  amount: number,
+  grossGain: number,
+  indexer: Indexer,
+  calendarDays: number,
+): number {
+  const average = amount + grossGain / 2;
+  const base = indexer === "selic"
+    ? Math.max(0, average - TESOURO_SELIC_CUSTODY_EXEMPT)
+    : average;
+  return base * TESOURO_CUSTODY_RATE * (calendarDays / CALENDAR_DAYS_PER_YEAR);
+}
+
+// ---------------------------------------------------------------------------
 // Rendimento
 // ---------------------------------------------------------------------------
 
@@ -110,10 +150,12 @@ export const businessDaysIn = (calendarDays: number) =>
 export interface Yield {
   businessDays: number;
   grossGain: number;
+  /** Custódia B3 acumulada (só Tesouro; 0 nos demais). Reduz a base do IR. */
+  custody: number;
   /** Alíquota de IR aplicada (0 para LCI/LCA). */
   taxRate: number;
   tax: number;
-  /** Valor final líquido (aplicado + ganho líquido). */
+  /** Valor final líquido (aplicado + ganho líquido, já sem custódia e IR). */
   net: number;
   netGain: number;
   /** Quanto o líquido equivale em % do CDI (100% do CDI bruto = 100). */
@@ -129,14 +171,33 @@ export function yieldOf(
 ): Yield {
   const businessDays = businessDaysIn(calendarDays);
   const grossGain = amount * (growthFactor(cdiAnnualPct, cdiPct, businessDays) - 1);
-  // LCI/LCA são isentas; CDB paga IR sobre o rendimento, na faixa do prazo.
-  const taxRate = kind === "cdb" ? irRate(calendarDays) : 0;
-  const tax = grossGain * taxRate;
-  const netGain = grossGain - tax;
+  return settle(amount, grossGain, kind, "cdi", cdiAnnualPct, calendarDays);
+}
+
+/**
+ * Gross gain to net: custódia (Tesouro only), then IR on the gross gain minus
+ * the custódia. LCI/LCA são isentas; CDB e Tesouro pagam IR na faixa do prazo.
+ */
+function settle(
+  amount: number,
+  grossGain: number,
+  kind: InvestKind,
+  indexer: Indexer,
+  cdiAnnualPct: number,
+  calendarDays: number,
+): Yield {
+  const businessDays = businessDaysIn(calendarDays);
+  const custody = kind === "tesouro"
+    ? tesouroCustody(amount, grossGain, indexer, calendarDays)
+    : 0;
+  const taxRate = isTaxed(kind) ? irRate(calendarDays) : 0;
+  const tax = Math.max(0, grossGain - custody) * taxRate;
+  const netGain = grossGain - custody - tax;
   const cdi100Gain = amount * (growthFactor(cdiAnnualPct, 100, businessDays) - 1);
   return {
     businessDays,
     grossGain,
+    custody,
     taxRate,
     tax,
     net: amount + netGain,
@@ -145,32 +206,39 @@ export function yieldOf(
   };
 }
 
-/** Constant-rate estimate for prefixado and IPCA + spread. */
+/**
+ * Reference rates the carteira is estimated with, as typed (% a.a.). IPCA and
+ * Selic are optional estimates: null leaves positions indexed to them pending.
+ */
+export interface Rates {
+  cdi: number;
+  ipca: number | null;
+  selic: number | null;
+}
+
+/**
+ * Estimate for any indexer. Prefixado, IPCA + spread and Selic + spread use a
+ * constant annual rate; IPCA and Selic need their estimate, or return null.
+ */
 export function yieldFor(
   amount: number,
   inv: Investment,
-  cdiAnnualPct: number,
-  ipcaAnnualPct: number | null,
+  rates: Rates,
   calendarDays: number,
 ): Yield | null {
   const indexer = indexerOf(inv);
   const rate = contractedRateOf(inv);
-  if (indexer === "cdi") return yieldOf(amount, cdiAnnualPct, rate, inv.kind, calendarDays);
-  if (indexer === "ipca" && ipcaAnnualPct === null) return null;
+  if (indexer === "cdi") return yieldOf(amount, rates.cdi, rate, inv.kind, calendarDays);
+  const reference = indexer === "ipca" ? rates.ipca : indexer === "selic" ? rates.selic : 0;
+  if (reference === null) return null;
 
   const businessDays = businessDaysIn(calendarDays);
+  // (1 + índice estimado) x (1 + spread) - 1; prefixado is just the rate.
   const annualPct = indexer === "fixed"
     ? rate
-    : ((1 + fromPct(ipcaAnnualPct!)) * (1 + fromPct(rate)) - 1) * 100;
+    : ((1 + fromPct(reference)) * (1 + fromPct(rate)) - 1) * 100;
   const grossGain = amount * (annualGrowthFactor(annualPct, businessDays) - 1);
-  const taxRate = inv.kind === "cdb" ? irRate(calendarDays) : 0;
-  const tax = grossGain * taxRate;
-  const netGain = grossGain - tax;
-  const cdi100Gain = amount * (growthFactor(cdiAnnualPct, 100, businessDays) - 1);
-  return {
-    businessDays, grossGain, taxRate, tax, net: amount + netGain, netGain,
-    netCdiPct: cdi100Gain > 0 ? (netGain / cdi100Gain) * 100 : 0,
-  };
+  return settle(amount, grossGain, inv.kind, indexer, rates.cdi, calendarDays);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +273,7 @@ export interface Position {
 
 export function positionOf(
   inv: Investment,
-  cdiAnnualPct: number,
-  ipcaAnnualPct: number | null = null,
+  rates: Rates,
   now: Date = new Date(),
 ): Position {
   const amount = inv.amount ?? 0;
@@ -220,14 +287,14 @@ export function positionOf(
   const days = applied ? daysBetween(applied, until) : 0;
   const maturityDays = applied && maturity ? daysBetween(applied, maturity) : 0;
   const maturityYield = applied && maturity
-    ? yieldFor(amount, inv, cdiAnnualPct, ipcaAnnualPct, maturityDays)
+    ? yieldFor(amount, inv, rates, maturityDays)
     : null;
 
   return {
     investment: inv,
     amount,
     days,
-    today: yieldFor(amount, inv, cdiAnnualPct, ipcaAnnualPct, days),
+    today: yieldFor(amount, inv, rates, days),
     atMaturity: maturityYield ? { days: maturityDays, ...maturityYield } : null,
     daysUntilMaturity: maturity ? daysBetween(today, maturity) : null,
     matured: !!maturity && maturity < today,
@@ -242,13 +309,18 @@ export function positionOf(
  */
 export function positions(
   list: Investment[],
-  cdiAnnualPct: number,
-  ipcaAnnualPct: number | null = null,
+  rates: Rates,
   now?: Date,
 ): Position[] {
   return list
-    .map((inv) => positionOf(inv, cdiAnnualPct, ipcaAnnualPct, now))
-    .sort((a, b) => (b.today?.netCdiPct ?? -1) - (a.today?.netCdiPct ?? -1));
+    .map((inv) => positionOf(inv, rates, now))
+    .sort((a, b) => {
+      // Pending positions (no estimate) always go last; custody can push a
+      // real netCdiPct below any small negative sentinel.
+      const x = a.today?.netCdiPct ?? -Infinity;
+      const y = b.today?.netCdiPct ?? -Infinity;
+      return x === y ? 0 : y > x ? 1 : -1;
+    });
 }
 
 /** Somatório da carteira: aplicado, valor hoje e ganho líquido. */

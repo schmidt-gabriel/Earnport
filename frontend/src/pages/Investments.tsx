@@ -2,7 +2,16 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../lib/useCollection";
 import { brl, fromDateInput, toDateInput } from "../lib/pb";
-import { contractedRateOf, indexerOf, portfolioTotals, positions, type Investment } from "../lib/invest";
+import {
+  contractedRateOf,
+  indexerOf,
+  indexersFor,
+  portfolioTotals,
+  positions,
+  type Indexer,
+  type Investment,
+  type InvestKind,
+} from "../lib/invest";
 import { NoInvestments, PositionCard, useRates } from "../components/invest";
 import { Button, Field, Input, Modal, Select } from "../components/ui";
 
@@ -17,19 +26,37 @@ const empty = {
   liquidity: "maturity",
   maturity: "",
   ipca_rate: "",
+  selic_rate: "",
+};
+
+const indexerOptions: Record<Indexer, string> = {
+  cdi: "CDI",
+  selic: "Selic + taxa",
+  ipca: "IPCA + taxa",
+  fixed: "Prefixado",
+};
+
+const rateFieldLabel: Record<Indexer, string> = {
+  cdi: "Taxa (% do CDI)",
+  selic: "Taxa adicional (% a.a.)",
+  ipca: "Taxa adicional (% a.a.)",
+  fixed: "Taxa fixa (% a.a.)",
 };
 
 // Purchased fixed-income positions lead with invested principal.
-// The optional IPCA reference remains in the investment modal.
+// The optional IPCA and Selic references remain in the investment modal.
 export default function Investments() {
   const { list, create, update, remove } = useCollection<Investment>(
     "investments_invest",
     { sort: "name" },
   );
-  const { cdi, ipca, saveReference } = useRates();
+  const { rates, ipca, selic, saveReference } = useRates();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Investment | null>(null);
   const [form, setForm] = useState<Record<string, string>>(empty);
+  // Whether the user picked a liquidity by hand; only then a kind change
+  // stops applying the kind's default liquidity.
+  const [liquidityTouched, setLiquidityTouched] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // The sidebar "+" links here with ?new=1, so react to the query string.
@@ -43,12 +70,14 @@ export default function Investments() {
 
   function openNew() {
     setEditing(null);
-    setForm({ ...empty, ipca_rate: ipca === null ? "" : String(ipca) });
+    setLiquidityTouched(false);
+    setForm({ ...empty, ...referenceInputs() });
     setOpen(true);
   }
 
   function openEdit(inv: Investment) {
     setEditing(inv);
+    setLiquidityTouched(false);
     setForm({
       name: inv.name,
       broker: inv.broker ?? "",
@@ -59,9 +88,35 @@ export default function Investments() {
       applied_at: toDateInput(inv.applied_at),
       liquidity: inv.liquidity ?? "maturity",
       maturity: toDateInput(inv.maturity),
-      ipca_rate: ipca === null ? "" : String(ipca),
+      ...referenceInputs(),
     });
     setOpen(true);
+  }
+
+  function referenceInputs() {
+    return {
+      ipca_rate: ipca === null ? "" : String(ipca),
+      selic_rate: selic === null ? "" : String(selic),
+    };
+  }
+
+  // Each kind offers its own indexers (Selic only for Tesouro, CDI never), so
+  // a kind change that invalidates the indexer falls back to the kind's first
+  // one. On a new record whose liquidity was not picked by hand, Tesouro
+  // defaults to daily liquidity and the other kinds to the form default.
+  function changeKind(kind: string) {
+    const allowed = indexersFor(kind as InvestKind);
+    const keepIndexer = allowed.includes(form.indexer as Indexer);
+    const applyDefault = !editing && !liquidityTouched;
+    setForm({
+      ...form,
+      kind,
+      indexer: keepIndexer ? form.indexer : allowed[0],
+      rate_pct: keepIndexer ? form.rate_pct : "",
+      liquidity: applyDefault
+        ? (kind === "tesouro" ? "daily" : empty.liquidity)
+        : form.liquidity,
+    });
   }
 
   async function submit(e: React.FormEvent) {
@@ -84,10 +139,13 @@ export default function Investments() {
     if (form.indexer === "ipca") {
       await saveReference("ipca", form.ipca_rate === "" ? null : Number(form.ipca_rate));
     }
+    if (form.indexer === "selic") {
+      await saveReference("selic", form.selic_rate === "" ? null : Number(form.selic_rate));
+    }
     setOpen(false);
   }
 
-  const carteira = positions(list.data ?? [], cdi, ipca);
+  const carteira = positions(list.data ?? [], rates);
   const total = portfolioTotals(carteira);
   // Corretoras já usadas, para sugerir no formulário.
   const brokers = [
@@ -160,10 +218,11 @@ export default function Investments() {
             <Field label="Tipo">
               <Select
                 value={form.kind}
-                onChange={(e) => setForm({ ...form, kind: e.target.value })}
+                onChange={(e) => changeKind(e.target.value)}
               >
                 <option value="cdb">CDB (IR regressivo)</option>
                 <option value="lci_lca">LCI/LCA (isento)</option>
+                <option value="tesouro">Tesouro (IR regressivo)</option>
               </Select>
             </Field>
             <Field label="Indexador">
@@ -171,15 +230,15 @@ export default function Investments() {
                 value={form.indexer}
                 onChange={(e) => setForm({ ...form, indexer: e.target.value, rate_pct: "" })}
               >
-                <option value="cdi">CDI</option>
-                <option value="ipca">IPCA + taxa</option>
-                <option value="fixed">Prefixado</option>
+                {indexersFor(form.kind as InvestKind).map((i) => (
+                  <option key={i} value={i}>{indexerOptions[i]}</option>
+                ))}
               </Select>
             </Field>
-            <Field label={form.indexer === "cdi" ? "Taxa (% do CDI)" : form.indexer === "ipca" ? "Taxa adicional (% a.a.)" : "Taxa fixa (% a.a.)"}>
+            <Field label={rateFieldLabel[form.indexer as Indexer] ?? "Taxa"}>
               <Input
                 type="number"
-                step="0.01"
+                step={form.indexer === "selic" ? "0.0001" : "0.01"}
                 min={0}
                 required
                 value={form.rate_pct}
@@ -195,6 +254,18 @@ export default function Investments() {
                   placeholder="Informar"
                   value={form.ipca_rate}
                   onChange={(e) => setForm({ ...form, ipca_rate: e.target.value })}
+                />
+              </Field>
+            )}
+            {form.indexer === "selic" && (
+              <Field label="Selic est. (% a.a.)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  placeholder="Informar"
+                  value={form.selic_rate}
+                  onChange={(e) => setForm({ ...form, selic_rate: e.target.value })}
                 />
               </Field>
             )}
@@ -219,7 +290,10 @@ export default function Investments() {
             <Field label="Liquidez">
               <Select
                 value={form.liquidity}
-                onChange={(e) => setForm({ ...form, liquidity: e.target.value })}
+                onChange={(e) => {
+                  setLiquidityTouched(true);
+                  setForm({ ...form, liquidity: e.target.value });
+                }}
               >
                 <option value="maturity">No vencimento</option>
                 <option value="daily">Diária</option>
