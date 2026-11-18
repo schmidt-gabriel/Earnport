@@ -110,10 +110,11 @@ scheduled, paid, payment_type auto|manual, currency BRL|USD),
 `tax_periods` (year, quarter, snapshot fields, locked), `settings` (singleton, tax params).
 
 Pessoa Física (suffix `_invest`, see **Modalidades** below):
-`investments_invest` (name, broker, kind cdb|lci_lca, indexer cdi|ipca|fixed,
-rate_pct, amount, applied_at, liquidity daily|maturity|market, maturity),
-`settings_invest` (singleton: cdi_rate, optional ipca_rate estimate, manually
-entered cash_balance, notification_webhook_url),
+`investments_invest` (name, broker, kind cdb|lci_lca|tesouro, indexer
+cdi|ipca|fixed|selic, rate_pct, amount, applied_at, liquidity daily|maturity|market,
+maturity; `selic` only pairs with `tesouro`, `cdi` never does),
+`settings_invest` (singleton: cdi_rate, optional ipca_rate and selic_rate estimates
+each with its `*_set` flag, manually entered cash_balance, notification_webhook_url),
 `notifications_invest` (key unique, event, sent_at: log of webhook notices
 already delivered; operational, left out of exports),
 `fiis_invest` (ticker, quantity, average_price, current_price, quoted_at,
@@ -151,9 +152,9 @@ cash balance. The "Resultado" summary separately totals estimated fixed-income
 net gains and FII price changes. Cash distributions are shown separately. The
 Result breakdown lists each asset's contribution to that total. It also lists the invested principal in active
 daily-liquidity positions and the maturity dates and projected net values of
-active positions redeemable only at maturity. A missing IPCA reference leaves
+active positions redeemable only at maturity. A missing IPCA or Selic reference leaves
 that projected value pending. Future applications and missing application dates are excluded.
-If a fixed-income position has no IPCA estimate, the combined current value is
+If a fixed-income position has no IPCA or Selic estimate, the combined current value is
 marked pending instead of showing a partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
@@ -161,10 +162,16 @@ bought. Each record carries `amount` (valor aplicado), `applied_at` and
 `broker` ("XP"). The card leads with the **invested principal** and shows the
 application date and contracted rate below it. The maturity value is labeled as
 an estimate, with the applicable IR bracket. The portfolio subtitle shows the total invested principal. Every input field
-of a title lives inside its modal; only the optional **estimated IPCA** reference
-is editable there when IPCA is selected. The CDI reference remains in
-`settings_invest` for existing projections but has no modal input. An IPCA
-position has no estimated value until the user provides an IPCA estimate.
+of a title lives inside its modal; only the optional **estimated IPCA** and
+**estimated Selic** references are editable there, each when its indexer is selected.
+The CDI reference remains in `settings_invest` for existing projections but has no
+modal input. An IPCA or Selic position has no estimated value until the user
+provides that estimate.
+
+**Tesouro Direto** is a third `kind` (`tesouro`, label "Tesouro") on the same page,
+not a page of its own. The modal offers each kind only its indexers
+(`indexersFor`): Tesouro takes Selic, IPCA or prefixado; CDB and LCI/LCA take CDI,
+IPCA or prefixado. Choosing Tesouro defaults the liquidez to diária.
 
 There used to be a second page, **Simulação** (`/pf`), a hypothetical "CDB ou LCI?"
 comparator with its own valor/prazo and the tie-rate (`equivalentTaxFreePct`). It
@@ -175,7 +182,8 @@ For positions with liquidity only at maturity, the maturity badge also shows
 the number of calendar days remaining (or "hoje" on the due date).
 
 The card shows **the taxa as it was typed** in the form ("98% do CDI",
-"IPCA + 6% a.a.", or "14,00% a.a. prefixado") plus the IR bracket. It does not show the
+"IPCA + 6% a.a.", "Selic + 0,05% a.a." or "14,00% a.a. prefixado") plus the IR
+bracket. A Tesouro card adds one line with the estimated custódia to date. It does not show the
 ganho líquido in reais nor the **% líquido do CDI**: both read as `0` on a position
 applied today, which is exactly when the card is looked at.
 
@@ -192,14 +200,24 @@ a gross/net/IR breakdown out. Rules:
 - **Capitalização em dias úteis (252/ano):** taxa diária = `(1+CDI)^(1/252)-1`, e o
   rendimento de títulos CDI é `(1 + taxa_diária × %CDI)^dias_úteis`.
   Prefixados usam `(1 + taxa anual)^dias_úteis/252`; IPCA + spread usa
-  `(1 + IPCA estimado) × (1 + spread) - 1` como taxa anual. Esses valores são
-  estimativas, não histórico de índices ou cotação de mercado.
+  `(1 + IPCA estimado) × (1 + spread) - 1` como taxa anual, e Selic + spread
+  (Tesouro Selic) usa `(1 + Selic estimada) × (1 + spread) - 1` do mesmo jeito.
+  Esses valores são estimativas, não histórico de índices ou cotação de mercado
+  (nem marcação a mercado do Tesouro).
 - **Prazo:** os dias corridos vêm do calendário, contados da data da aplicação; os
   **dias úteis** são derivados por `dias_corridos × 252/365`, o que embute os
   feriados sem precisar de uma tabela deles (12 meses = 365 dias = 252 dias úteis,
   exatamente).
 - **IR regressivo** por **dias corridos**, sobre o rendimento: 22,5% até 180, 20%
-  até 360, 17,5% até 720, 15% acima. Só para **CDB**; **LCI/LCA são isentas**.
+  até 360, 17,5% até 720, 15% acima. Para **CDB** e **Tesouro**; **LCI/LCA são
+  isentas** (`isTaxed`).
+- **Custódia B3 (só Tesouro):** 0,20% a.a. (`TESOURO_CUSTODY_RATE`), pro rata por
+  dias corridos/365, sobre o valor da posição; no **Tesouro Selic** os primeiros
+  R$10.000 são isentos (`TESOURO_SELIC_CUSTODY_EXEMPT`). Aproximação: a base é a
+  média entre o aplicado e o valor bruto na data, e a isenção vale por posição (a
+  B3 cobra sobre o saldo diário e aplica a isenção ao total do investidor). A
+  custódia sai do rendimento antes do IR (IR sobre ganho bruto - custódia) e do
+  valor líquido; `yieldFor` a expõe em `custody`.
 - **% líquido do CDI** = ganho líquido ÷ ganho de um título a 100% do CDI no mesmo
   prazo. Não é exibido; serve para ranquear posições de tamanhos diferentes.
 - **Um título vencido para de render:** a contagem de dias trava no vencimento, e o

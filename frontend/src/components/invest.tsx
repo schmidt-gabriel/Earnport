@@ -8,6 +8,7 @@ import {
   rateLabel,
   indexerOf,
   type Position,
+  type Rates,
 } from "../lib/invest";
 import { fmtDate, pct } from "../lib/pb";
 import { Button, Card } from "./ui";
@@ -20,11 +21,20 @@ type InvestSettings = {
   cdi_rate?: number;
   ipca_rate?: number;
   ipca_rate_set?: boolean;
+  selic_rate?: number;
+  selic_rate_set?: boolean;
 };
 
+const ratesOf = (record?: InvestSettings): Rates => ({
+  cdi: record?.cdi_rate ?? DEFAULT_CDI,
+  ipca: record?.ipca_rate_set ? (record.ipca_rate ?? 0) : null,
+  selic: record?.selic_rate_set ? (record.selic_rate ?? 0) : null,
+});
+
 /**
- * Stored CDI reference and optional IPCA estimate from `settings_invest`.
- * Only the IPCA estimate can be edited in the investment modal.
+ * Stored CDI reference and optional IPCA and Selic estimates from
+ * `settings_invest`. Only the IPCA and Selic estimates can be edited in the
+ * investment modal.
  */
 export function useRates() {
   const { list, create, update } = useCollection<InvestSettings>("settings_invest", {
@@ -32,40 +42,39 @@ export function useRates() {
     sort: "-updated",
   });
   const record = list.data?.[0];
-  const [rates, setRates] = useState<{ cdi: number; ipca: number | null } | null>(null);
+  const [rates, setRates] = useState<Rates | null>(null);
 
   // Adopt the stored value once, when it arrives.
   useEffect(() => {
     if (rates !== null || !list.isSuccess) return;
-    setRates({
-      cdi: record?.cdi_rate ?? DEFAULT_CDI,
-      ipca: record?.ipca_rate_set ? (record.ipca_rate ?? 0) : null,
-    });
+    setRates(ratesOf(record));
   }, [list.isSuccess, record, rates]);
 
-  async function saveReference(indexer: "cdi" | "ipca", value: number | null) {
+  async function saveReference(indexer: keyof Rates, value: number | null) {
     const current = record ?? (await list.refetch()).data?.[0];
-    const previous = rates ?? {
-      cdi: current?.cdi_rate ?? DEFAULT_CDI,
-      ipca: current?.ipca_rate_set ? (current.ipca_rate ?? 0) : null,
-    };
-    const next = indexer === "cdi"
+    const previous = rates ?? ratesOf(current);
+    const next: Rates = indexer === "cdi"
       ? { ...previous, cdi: value as number }
-      : { ...previous, ipca: value };
-    if (next.cdi === previous.cdi && next.ipca === previous.ipca) return;
+      : { ...previous, [indexer]: value };
+    if (next.cdi === previous.cdi && next.ipca === previous.ipca && next.selic === previous.selic) return;
     const data = {
       cdi_rate: next.cdi,
       ipca_rate: next.ipca ?? 0,
       ipca_rate_set: next.ipca !== null,
+      selic_rate: next.selic ?? 0,
+      selic_rate_set: next.selic !== null,
     };
     if (current) await update.mutateAsync({ id: current.id, data });
     else await create.mutateAsync(data);
     setRates(next);
   }
 
+  const resolved = rates ?? ratesOf();
   return {
-    cdi: rates?.cdi ?? DEFAULT_CDI,
-    ipca: rates?.ipca ?? null,
+    rates: resolved,
+    cdi: resolved.cdi,
+    ipca: resolved.ipca,
+    selic: resolved.selic,
     ready: rates !== null,
     error: list.isError,
     saveReference,
@@ -128,6 +137,11 @@ export function PositionCard({
           {rateLabel(inv)}
           {p.today && p.today.taxRate > 0 && ` · IR ${pct(p.today.taxRate * 100)}%`}
         </p>
+        {p.today && p.today.custody > 0 && (
+          <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+            Custódia estimada: {brl(p.today.custody)}
+          </p>
+        )}
         {p.atMaturity && !p.matured && (
           <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
             Estimativa no vencimento: {brl(p.atMaturity.net)}
@@ -138,6 +152,7 @@ export function PositionCard({
       <div className="mt-4 flex flex-wrap items-center gap-1.5">
         <Badge>{liquidityLabel(inv.liquidity)}</Badge>
         {indexerOf(inv) === "ipca" && !p.today && <Badge tone="warn">Informe IPCA estimado</Badge>}
+        {indexerOf(inv) === "selic" && !p.today && <Badge tone="warn">Informe Selic estimada</Badge>}
         {inv.maturity && (
           <Badge>
             Vence {fmtDate(inv.maturity)}

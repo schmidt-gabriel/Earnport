@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Button, Card, Field, Input, Modal } from "../components/ui";
 import { useRates } from "../components/invest";
 import { fiiTotals, holdingChange, type FiiDividend, type FiiHolding } from "../lib/fiis";
-import { portfolioTotals, positions, type Investment } from "../lib/invest";
+import { indexerOf, portfolioTotals, positions, type Investment } from "../lib/invest";
 import { brl, fmtDate } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
 
@@ -17,9 +17,9 @@ export default function PortfolioOverview() {
   const investments = useCollection<Investment>("investments_invest", { sort: "name" });
   const fiis = useCollection<FiiHolding>("fiis_invest", { sort: "ticker" });
   const dividends = useCollection<FiiDividend>("fii_dividends_invest", { sort: "-payment_date" });
-  const { cdi, ipca, ready: ratesReady, error: ratesError } = useRates();
+  const { rates, ready: ratesReady, error: ratesError } = useRates();
 
-  const fixedPositions = positions(investments.list.data ?? [], cdi, ipca);
+  const fixedPositions = positions(investments.list.data ?? [], rates);
   const fixed = portfolioTotals(fixedPositions);
   const daily = fixedPositions.filter(
     (p) => p.investment.liquidity === "daily" && !p.pending && p.amount > 0,
@@ -64,6 +64,12 @@ export default function PortfolioOverview() {
   const current = applied + cashBalance;
   const result = fixed.netGain + variable.change;
   const incomplete = fixed.incomplete;
+  // Which estimate is missing: only IPCA and Selic positions can lack one.
+  const missingSelic = fixedPositions.some((p) => !p.today && indexerOf(p.investment) === "selic");
+  const missingIpca = fixedPositions.some((p) => !p.today && indexerOf(p.investment) === "ipca");
+  const missingLabel = [missingIpca && "o IPCA estimado", missingSelic && "a Selic estimada"]
+    .filter(Boolean)
+    .join(" e ");
   const failed = investments.list.isError || fiis.list.isError || dividends.list.isError || settings.list.isError || ratesError;
   const loading = investments.list.isPending || fiis.list.isPending || dividends.list.isPending || settings.list.isPending || !ratesReady;
 
@@ -83,7 +89,7 @@ export default function PortfolioOverview() {
     try {
       const record = settings.list.data?.[0];
       if (record) await settings.update.mutateAsync({ id: record.id, data: { cash_balance: value } });
-      else await settings.create.mutateAsync({ cdi_rate: cdi, cash_balance: value });
+      else await settings.create.mutateAsync({ cdi_rate: rates.cdi, cash_balance: value });
       setCashOpen(false);
     } catch {
       setCashError("Não foi possível salvar o saldo.");
@@ -127,7 +133,7 @@ export default function PortfolioOverview() {
       </div>
       {incomplete && (
         <p className="text-sm text-amber-700 dark:text-amber-400">
-          Informe o IPCA estimado em Renda fixa para completar a estimativa.
+          Informe {missingLabel || "o IPCA estimado"} em Renda fixa para completar a estimativa.
         </p>
       )}
 
