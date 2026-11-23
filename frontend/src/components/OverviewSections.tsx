@@ -11,7 +11,7 @@ import {
   IRRF_START_YEAR,
   suggestedIrrf,
 } from "../lib/types";
-import { pb, brl, usd, fmtDate } from "../lib/pb";
+import { pb, brl, usd, fmtDate, num, pct, quote } from "../lib/pb";
 import { Card } from "./ui";
 
 // The non-chart half of the Dashboard: one KPI strip for the year, then the
@@ -192,25 +192,25 @@ export function YearSummary() {
       <Kpi
         label="Faturamento"
         value={brl(bruto)}
-        hint={receivedUsd > 0 ? `${((importedUsd / receivedUsd) * 100).toFixed(0)}% do recebido convertido` : undefined}
+        hint={receivedUsd > 0 ? `${num((importedUsd / receivedUsd) * 100)}% do recebido convertido` : undefined}
       />
       <Kpi label="Despesas" value={brl(despesas)} hint="pagas no ano" />
       <Kpi
         label="Líquido"
         value={brl(liquido)}
-        hint={bruto > 0 ? `margem de ${((liquido / bruto) * 100).toFixed(1)}%` : undefined}
+        hint={bruto > 0 ? `margem de ${pct((liquido / bruto) * 100)}%` : undefined}
       />
       <Kpi
         label="Impostos (apuração)"
         value={brl(yearTotal)}
-        hint={bruto > 0 ? `${((yearTotal / bruto) * 100).toFixed(1)}% do faturamento` : undefined}
+        hint={bruto > 0 ? `${pct((yearTotal / bruto) * 100)}% do faturamento` : undefined}
       />
       <Kpi
         label="Lucros distribuídos"
         value={brl(annualDist.total)}
         hint={
           annualDist.taxable
-            ? `IRRF ${brl(annualDist.irrf)} · ${((annualDist.total / ANNUAL_REFUND_LIMIT) * 100).toFixed(0)}% da cota de R$600k${
+            ? `IRRF ${brl(annualDist.irrf)} · ${num((annualDist.total / ANNUAL_REFUND_LIMIT) * 100)}% da cota de R$600k${
                 Math.abs(annualDist.irrf - annualDist.expected) >= 0.01
                   ? ` · pela regra ${brl(annualDist.expected)}`
                   : ""
@@ -223,7 +223,7 @@ export function YearSummary() {
         value={usd(toBring)}
         hint={
           estimateRate
-            ? `≈ ${brl(toBring * estimateRate)} · cotação ${(rate || effectiveRate).toFixed(4)}${rate ? (fx.data?.stale ? " (desatualizada)" : "") : " (efetiva)"}`
+            ? `≈ ${brl(toBring * estimateRate)} · cotação ${quote(rate || effectiveRate)}${rate ? (fx.data?.stale ? " (desatualizada)" : "") : " (efetiva)"}`
             : `de ${usd(receivedUsd)} recebidos`
         }
       />
@@ -341,7 +341,7 @@ export function LastImport() {
       compact
       label={`Última importação · ${fmtDate(last.convert_day)}`}
       value={brl(last.amount_brl)}
-      hint={`${usd(last.amount_usd)}${effective ? ` a ${effective.toFixed(4)}` : ""}${
+      hint={`${usd(last.amount_usd)}${effective ? ` a ${quote(effective)}` : ""}${
         last.platform ? ` · ${last.platform}` : ""
       }`}
     />

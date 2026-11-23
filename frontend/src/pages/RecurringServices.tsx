@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCollection } from "../lib/useCollection";
 import type { RecurringService } from "../lib/types";
 import { brl } from "../lib/pb";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select } from "../components/ui";
 
 const empty = { name: "", category: "", exp_day: "", default_amount: "", payment_type: "manual" };
 
@@ -133,12 +133,9 @@ export default function RecurringServices() {
               />
             </Field>
             <Field label="Valor padrão (R$, opcional)">
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
+              <MoneyInput
                 value={form.default_amount as string}
-                onChange={(e) => setForm({ ...form, default_amount: e.target.value })}
+                onChange={(n) => setForm({ ...form, default_amount: n === null ? "" : String(n) })}
               />
             </Field>
             <Field label="Pagamento">

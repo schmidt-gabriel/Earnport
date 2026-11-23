@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCollection, usePlatformNames } from "../lib/useCollection";
 import type { Client } from "../lib/types";
 import { usd } from "../lib/pb";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select } from "../components/ui";
 
 const empty = {
   name: "",
@@ -161,12 +161,9 @@ export default function Clients() {
                 form.billing_type === "hourly" ? "por hora" : "mensal"
               } (USD)`}
             >
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
+              <MoneyInput
                 value={form.monthly_amount as string}
-                onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+                onChange={(n) => setForm({ ...form, monthly_amount: n === null ? "" : String(n) })}
               />
               <span className="text-xs text-neutral-400 dark:text-neutral-500">
                 {form.billing_type === "hourly"

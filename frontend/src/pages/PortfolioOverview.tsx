@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Button, Card, Field, Input, Modal } from "../components/ui";
+import { Button, Card, Field, Modal, MoneyInput } from "../components/ui";
 import { useRates } from "../components/invest";
-import { fiiTotals, holdingChange, type FiiDividend, type FiiHolding } from "../lib/fiis";
-import { indexerOf, portfolioTotals, positions, type Investment } from "../lib/invest";
+import { fiiTotals, holdingChange, sortFiis, type FiiDividend, type FiiHolding } from "../lib/fiis";
+import {
+  currentValueOf,
+  indexerOf,
+  portfolioTotals,
+  positionResult,
+  positions,
+  type Investment,
+} from "../lib/invest";
+import { readSortPref } from "../lib/useSortPref";
 import { brl, fmtDate } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
 
@@ -19,7 +27,9 @@ export default function PortfolioOverview() {
   const dividends = useCollection<FiiDividend>("fii_dividends_invest", { sort: "-payment_date" });
   const { rates, ready: ratesReady, error: ratesError } = useRates();
 
-  const fixedPositions = positions(investments.list.data ?? [], rates);
+  // Same order the Renda fixa and FIIs pages were last left in.
+  const fixedPositions = positions(investments.list.data ?? [], rates, undefined, readSortPref("renda-fixa"));
+  const holdings = sortFiis(fiis.list.data ?? [], readSortPref("fiis"));
   const fixed = portfolioTotals(fixedPositions);
   const daily = fixedPositions.filter(
     (p) => p.investment.liquidity === "daily" && !p.pending && p.amount > 0,
@@ -45,13 +55,15 @@ export default function PortfolioOverview() {
       rows: fixedPositions.map((p) => ({
         id: p.investment.id,
         name: p.investment.name,
-        detail: p.pending ? "Aplicação pendente" : "Ganho líquido estimado",
-        value: p.today?.netGain ?? null,
+        detail: currentValueOf(p.investment) !== null
+          ? "Valor atual informado"
+          : p.pending ? "Aplicação pendente" : "Ganho líquido estimado",
+        value: positionResult(p),
       })),
     },
     {
       label: "FIIs",
-      rows: (fiis.list.data ?? []).map((fii) => ({
+      rows: holdings.map((fii) => ({
         id: fii.id,
         name: fii.ticker,
         detail: "Variação da cotação",
@@ -61,12 +73,15 @@ export default function PortfolioOverview() {
   ];
   const applied = fixed.amount + variable.cost;
   const cashBalance = settings.list.data?.[0]?.cash_balance ?? 0;
-  const current = applied + cashBalance;
-  const result = fixed.netGain + variable.change;
+  // Fixed income at the value typed in, else its principal (never the
+  // estimate); FIIs at market value; plus the cash balance.
+  const current = fixed.value + variable.value + cashBalance;
+  const result = fixed.result + variable.change;
   const incomplete = fixed.incomplete;
   // Which estimate is missing: only IPCA and Selic positions can lack one.
-  const missingSelic = fixedPositions.some((p) => !p.today && indexerOf(p.investment) === "selic");
-  const missingIpca = fixedPositions.some((p) => !p.today && indexerOf(p.investment) === "ipca");
+  const missingResult = fixedPositions.filter((p) => positionResult(p) === null);
+  const missingSelic = missingResult.some((p) => indexerOf(p.investment) === "selic");
+  const missingIpca = missingResult.some((p) => indexerOf(p.investment) === "ipca");
   const missingLabel = [missingIpca && "o IPCA estimado", missingSelic && "a Selic estimada"]
     .filter(Boolean)
     .join(" e ");
@@ -105,7 +120,7 @@ export default function PortfolioOverview() {
   }
 
   const summary = [
-    { label: "Valor atual", value: brl(current), detail: "Aplicado + saldo" },
+    { label: "Valor atual", value: brl(current), detail: "Atual ou aplicado + saldo" },
     { label: "Valor aplicado", value: brl(applied) },
     { label: "Resultado", value: incomplete ? "Estimativa pendente" : brl(result) },
     { label: "Proventos recebidos", value: brl(variable.dividends) },
@@ -252,13 +267,10 @@ export default function PortfolioOverview() {
         <Modal title="Saldo da conta de investimentos" onClose={() => setCashOpen(false)}>
           <form onSubmit={saveCash} className="space-y-4">
             <Field label="Saldo (R$)">
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
+              <MoneyInput
                 required
                 value={cashInput}
-                onChange={(e) => setCashInput(e.target.value)}
+                onChange={(n) => setCashInput(n === null ? "" : String(n))}
               />
             </Field>
             {cashError && <p role="alert" className="text-sm text-red-600">{cashError}</p>}

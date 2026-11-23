@@ -4,7 +4,7 @@ import { useCollection, usePlatformNames } from "../lib/useCollection";
 import { MONTHS, useYear } from "../lib/year";
 import type { Client, Remittance } from "../lib/types";
 import { usd, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select } from "../components/ui";
 
 const empty = { client: "", platform: "", amount_usd: "", pay_day: "", notes: "" };
 
@@ -25,10 +25,12 @@ function todayInput(): string {
 function defaultAmount(c: Client): string {
   if (!c.monthly_amount) return "";
   const weekly = c.pay_frequency === "weekly";
+  // Rounded to cents: the money field shows two decimals, so it must also store two.
+  const cents = (v: number) => String(Math.round(v * 100) / 100);
   if (c.billing_type === "hourly") {
-    return String(c.monthly_amount * (weekly ? 40 : 160));
+    return cents(c.monthly_amount * (weekly ? 40 : 160));
   }
-  return String(weekly ? c.monthly_amount / 4 : c.monthly_amount);
+  return cents(weekly ? c.monthly_amount / 4 : c.monthly_amount);
 }
 
 export default function Remittances() {
@@ -196,12 +198,10 @@ export default function Remittances() {
               </Select>
             </Field>
             <Field label="Valor (USD)">
-              <Input
-                type="number"
-                step="0.01"
+              <MoneyInput
                 required
                 value={form.amount_usd as string}
-                onChange={(e) => setForm({ ...form, amount_usd: e.target.value })}
+                onChange={(n) => setForm({ ...form, amount_usd: n === null ? "" : String(n) })}
               />
             </Field>
             <Field label="Data do pagamento">

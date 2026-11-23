@@ -7,6 +7,7 @@
 // types them (13.9 = 13,9% a.a., 98 = 98% do CDI) and are turned into
 // fractions at the edge, by `fromPct`.
 
+import { num } from "./numberFormat";
 import type { BaseRecord } from "./types";
 
 export type InvestKind = "cdb" | "lci_lca" | "tesouro";
@@ -32,6 +33,8 @@ export interface Investment extends BaseRecord {
   applied_at?: string;
   /** Corretora onde o título está ("XP"), texto livre. */
   broker?: string;
+  /** Valor atual informado à mão (extrato da corretora), R$. 0/vazio = não informado. */
+  current_value?: number;
   notes?: string;
 }
 
@@ -50,10 +53,7 @@ export const contractedRateOf = (inv: Investment) =>
   inv.indexer ? (inv.rate_pct ?? 0) : (inv.cdi_pct ?? inv.rate_pct ?? 0);
 export const rateLabel = (inv: Investment) => {
   const indexer = indexerOf(inv);
-  const rate = contractedRateOf(inv).toLocaleString("pt-BR", {
-    minimumFractionDigits: indexer === "fixed" ? 2 : 0,
-    maximumFractionDigits: indexer === "selic" ? 4 : 2,
-  });
+  const rate = num(contractedRateOf(inv), indexer === "fixed" ? 2 : 0, indexer === "selic" ? 4 : 2);
   switch (indexer) {
     case "ipca": return `IPCA + ${rate}% a.a.`;
     case "selic": return `Selic + ${rate}% a.a.`;
@@ -302,36 +302,63 @@ export function positionOf(
   };
 }
 
+export type PositionSort = "date" | "name";
+
+const byName = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+
 /**
- * A carteira toda, do melhor para o pior. O critério é o **% líquido do CDI**,
- * não o ganho em reais: as posições têm tamanhos diferentes, então reais
- * premiariam a maior aplicação em vez do melhor papel.
+ * A carteira na ordem escolhida. "date": data da aplicação, mais antiga
+ * primeiro, sem data por último; "name": A-Z. Empates caem no outro critério.
  */
 export function positions(
   list: Investment[],
   rates: Rates,
   now?: Date,
+  sort: PositionSort = "date",
 ): Position[] {
+  const applied = (p: Position) => p.investment.applied_at?.slice(0, 10) ?? "";
+  const byDate = (a: Position, b: Position) => {
+    const x = applied(a);
+    const y = applied(b);
+    if (x === y) return 0;
+    if (!x) return 1;
+    if (!y) return -1;
+    return x < y ? -1 : 1;
+  };
+  const names = (a: Position, b: Position) => byName(a.investment.name, b.investment.name);
   return list
     .map((inv) => positionOf(inv, rates, now))
-    .sort((a, b) => {
-      // Pending positions (no estimate) always go last; custody can push a
-      // real netCdiPct below any small negative sentinel.
-      const x = a.today?.netCdiPct ?? -Infinity;
-      const y = b.today?.netCdiPct ?? -Infinity;
-      return x === y ? 0 : y > x ? 1 : -1;
-    });
+    .sort((a, b) => (sort === "name" ? names(a, b) || byDate(a, b) : byDate(a, b) || names(a, b)));
 }
 
-/** Somatório da carteira: aplicado, valor hoje e ganho líquido. */
+/** Valor atual informado, ou null quando o campo está vazio (PocketBase guarda 0). */
+export const currentValueOf = (inv: Investment) =>
+  inv.current_value && inv.current_value > 0 ? inv.current_value : null;
+
+/** Valor da posição para os totais: o atual informado, senão o principal aplicado. */
+export const positionValue = (p: Position) => currentValueOf(p.investment) ?? p.amount;
+
+/**
+ * Resultado da posição: valor atual informado - aplicado; sem ele, o ganho
+ * líquido estimado. null quando a estimativa depende de IPCA/Selic ausente.
+ */
+export const positionResult = (p: Position) => {
+  const current = currentValueOf(p.investment);
+  return current !== null ? current - p.amount : (p.today?.netGain ?? null);
+};
+
+/** Somatório da carteira: aplicado, valor atual e resultado. */
 export function portfolioTotals(list: Position[]) {
   return list.reduce(
-    (acc, p) => ({
-      amount: acc.amount + p.amount,
-      net: acc.net + (p.today?.net ?? 0),
-      netGain: acc.netGain + (p.today?.netGain ?? 0),
-      incomplete: acc.incomplete || p.today === null,
-    }),
-    { amount: 0, net: 0, netGain: 0, incomplete: false },
+    (acc, p) => {
+      const result = positionResult(p);
+      return {
+        amount: acc.amount + p.amount,
+        value: acc.value + positionValue(p),
+        result: acc.result + (result ?? 0),
+        incomplete: acc.incomplete || result === null,
+      };
+    },
+    { amount: 0, value: 0, result: 0, incomplete: false },
   );
 }

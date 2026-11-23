@@ -6,6 +6,7 @@ import Export from "./Export";
 import Account from "./Account";
 import Maintenance from "./Maintenance";
 import Notifications from "./Notifications";
+import Preferences, { consumeResumeTab } from "./Preferences";
 
 const TABS = [
   { key: "clientes", label: "Clientes" },
@@ -15,11 +16,13 @@ const TABS = [
   { key: "notificacoes", label: "Notificações" },
   { key: "dados", label: "Dados" },
   { key: "usuario", label: "Usuário" },
+  { key: "preferencias", label: "Preferências" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
 export default function Config() {
-  const [tab, setTab] = useState<TabKey>("clientes");
+  // A number format change remounts the page; come back to the tab it was made on.
+  const [tab, setTab] = useState<TabKey>(() => consumeResumeTab() ?? "clientes");
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Configurações</h1>
@@ -47,6 +50,7 @@ export default function Config() {
       {tab === "notificacoes" && <Notifications />}
       {tab === "dados" && <Export />}
       {tab === "usuario" && <Account />}
+      {tab === "preferencias" && <Preferences />}
     </div>
   );
 }

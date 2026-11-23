@@ -3,7 +3,7 @@ import { useCollection } from "../lib/useCollection";
 import { useYear } from "../lib/year";
 import type { Client, Expense, ImportRecord, ProfitDistribution, Remittance } from "../lib/types";
 import { expenseCountsInBrl, IRRF_MONTHLY_LIMIT } from "../lib/types";
-import { pb, brl, usd, fmtDate } from "../lib/pb";
+import { pb, brl, usd, fmtDate, num, quote } from "../lib/pb";
 import {
   DistributionMeter,
   ExpensesMeter,
@@ -34,11 +34,12 @@ const monthIdx = (d: string) => Number(d.slice(5, 7)) - 1;
 // Compact axis ticks; the exact values live in the tooltips and the table view.
 const brlTick = (v: number) =>
   v >= 1_000_000
-    ? `R$ ${(v / 1_000_000).toFixed(1).replace(".", ",")}M`
+    ? `R$ ${num(v / 1_000_000, 1)}M`
     : v >= 1000
-      ? `R$ ${Math.round(v / 1000)}k`
-      : `R$ ${Math.round(v)}`;
-const usdTick = (v: number) => (v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${Math.round(v)}`);
+      ? `R$ ${num(Math.round(v / 1000))}k`
+      : `R$ ${num(Math.round(v))}`;
+const usdTick = (v: number) =>
+  v >= 1000 ? `$${num(Math.round(v / 1000))}k` : `$${num(Math.round(v))}`;
 
 type Quarter = { quarter: number; irpj: number; irpj_adicional: number; csll: number; total: number };
 
@@ -284,13 +285,13 @@ export default function Dashboard() {
             grow
             title="Cotação efetiva das importações"
             subtitle={`BRL recebido ÷ USD enviado, com taxas${
-              avgRate ? ` · média ${avgRate.toFixed(4)}` : ""
-            }${fx.data?.rate ? ` · linha: mercado hoje ${fx.data.rate.toFixed(4)}` : ""}`}
+              avgRate ? ` · média ${quote(avgRate)}` : ""
+            }${fx.data?.rate ? ` · linha: mercado hoje ${quote(fx.data.rate)}` : ""}`}
             data={effective}
             color="var(--viz-s1)"
             label="Cotação efetiva"
-            format={(v) => v.toFixed(4)}
-            tick={(v) => v.toFixed(2)}
+            format={quote}
+            tick={(v) => num(v, 2)}
             reference={fx.data?.rate ? { value: fx.data.rate } : undefined}
           />
         </div>
