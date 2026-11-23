@@ -3,6 +3,7 @@ import { brl } from "../lib/pb";
 import { useCollection } from "../lib/useCollection";
 import {
   DEFAULT_CDI,
+  currentValueOf,
   kindLabel,
   liquidityLabel,
   rateLabel,
@@ -130,6 +131,11 @@ export function PositionCard({
         {inv.applied_at && (
           <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
             Aplicado em {fmtDate(inv.applied_at)}
+          </p>
+        )}
+        {currentValueOf(inv) !== null && (
+          <p className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+            Valor atual: {brl(currentValueOf(inv)!)}
           </p>
         )}
         {/* A taxa contratada, como ela foi digitada no formulário. */}

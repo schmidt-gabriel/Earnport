@@ -3,8 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useCollection, usePlatformNames } from "../lib/useCollection";
 import { MONTHS, useYear } from "../lib/year";
 import type { ImportRecord } from "../lib/types";
-import { pb, brl, usd, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { pb, brl, usd, fmtDate, quote, toDateInput, fromDateInput } from "../lib/pb";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select } from "../components/ui";
 
 const empty = { platform: "", amount_usd: "", convert_day: "", amount_brl: "", notes: "" };
 
@@ -125,7 +125,7 @@ export default function Imports() {
                 <td className="px-4 py-3">{fmtDate(i.convert_day)}</td>
                 <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{i.platform}</td>
                 <td className="px-4 py-3 text-right">{usd(i.amount_usd)}</td>
-                <td className="px-4 py-3 text-right">{i.rate.toFixed(4)}</td>
+                <td className="px-4 py-3 text-right">{quote(i.rate)}</td>
                 <td className="px-4 py-3 text-right font-medium">{brl(i.amount_brl)}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <Button variant="ghost" onClick={() => openEdit(i)}>
@@ -180,12 +180,10 @@ export default function Imports() {
               </Select>
             </Field>
             <Field label="Valor (USD)">
-              <Input
-                type="number"
-                step="0.01"
+              <MoneyInput
                 required
                 value={form.amount_usd}
-                onChange={(e) => setForm({ ...form, amount_usd: e.target.value })}
+                onChange={(n) => setForm({ ...form, amount_usd: n === null ? "" : String(n) })}
               />
             </Field>
             <Field label="Data da conversão">
@@ -199,12 +197,10 @@ export default function Imports() {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Field label="Valor recebido (BRL)">
-                  <Input
-                    type="number"
-                    step="0.01"
+                  <MoneyInput
                     required
                     value={form.amount_brl}
-                    onChange={(e) => setForm({ ...form, amount_brl: e.target.value })}
+                    onChange={(n) => setForm({ ...form, amount_brl: n === null ? "" : String(n) })}
                   />
                 </Field>
               </div>
@@ -216,7 +212,7 @@ export default function Imports() {
             <div className="rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
               Cotação efetiva:{" "}
               <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                {effectiveRate ? effectiveRate.toFixed(4) : "—"}
+                {effectiveRate ? quote(effectiveRate) : "—"}
               </span>
               <span className="text-neutral-400 dark:text-neutral-500"> (BRL ÷ USD, já com a taxa da plataforma)</span>
             </div>

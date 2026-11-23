@@ -1,4 +1,5 @@
 import PocketBase from "pocketbase";
+import { currency, num } from "./numberFormat";
 
 // "/" → root-relative to the current origin. Using "" would make the SDK
 // resolve API paths relative to the current route (e.g. "/lucros/api/..."),
@@ -6,15 +7,20 @@ import PocketBase from "pocketbase";
 // backend; in production PocketBase serves the SPA, so same origin works too.
 export const pb = new PocketBase("/");
 
-export const brl = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Display formatters. Separators follow the app-wide number format preference
+// (lib/numberFormat.ts); symbols stay per currency. Never use them for values
+// sent to the backend or written to exports.
+export { num } from "./numberFormat";
 
-// Percentual com uma casa, em pt-BR: 88.3 -> "88,3".
-export const pct = (v: number) =>
-  v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+export const brl = (v: number) => currency(v, "R$", true);
 
-export const usd = (v: number) =>
-  v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+export const usd = (v: number) => currency(v, "$", false);
+
+// Percentual com uma casa: 88.3 -> "88,3" (or "88.3" in the "dot" format).
+export const pct = (v: number) => num(v, 1);
+
+// FX quotes and effective rates: four decimals ("5,4321").
+export const quote = (v: number) => num(v, 4);
 
 // PocketBase stores datetimes; we work with calendar dates in the UI.
 // "2026-06-26 12:00:00.000Z" -> "2026-06-26" for <input type="date">.

@@ -42,8 +42,10 @@ frontend/
   src/pages/                    # Dashboard, Remittances, Imports, Expenses,
                                 # ProfitDistributions, Taxes, Config, Export, Login,
                                 # PortfolioOverview, Investments, Fiis (Pessoa Física)
-  src/lib/                      # pb (client + formatters), useCollection, types, theme,
-                                # mode (PJ/PF switch), invest (renda fixa calculator), fiis
+  src/lib/                      # pb (client + formatters), numberFormat (separator
+                                # preference), money (MoneyInput helpers), useCollection,
+                                # types, theme, useSortPref, mode (PJ/PF switch),
+                                # invest (renda fixa calculator), fiis
   src/components/               # ui primitives, Layout,
                                 # OverviewSections (year strip + month cards of
                                 # the landing page), charts (SVG chart kit),
@@ -111,8 +113,10 @@ scheduled, paid, payment_type auto|manual, currency BRL|USD),
 
 Pessoa Física (suffix `_invest`, see **Modalidades** below):
 `investments_invest` (name, broker, kind cdb|lci_lca|tesouro, indexer
-cdi|ipca|fixed|selic, rate_pct, amount, applied_at, liquidity daily|maturity|market,
-maturity; `selic` only pairs with `tesouro`, `cdi` never does),
+cdi|ipca|fixed|selic, rate_pct, amount, current_value, applied_at, liquidity
+daily|maturity|market, maturity; `selic` only pairs with `tesouro`, `cdi` never does;
+`current_value` is optional and typed by hand, stored as 0 when empty, and 0 means
+"not set", added by `migrations/1752030000_invest_current_value.go`),
 `settings_invest` (singleton: cdi_rate, optional ipca_rate and selic_rate estimates
 each with its `*_set` flag, manually entered cash_balance, notification_webhook_url),
 `notifications_invest` (key unique, event, sent_at: log of webhook notices
@@ -146,21 +150,27 @@ the sidebar hides those selectors there.
 ### Pessoa Física: a carteira
 
 **Geral** (`/pf/geral`) is the PF landing page. Its modality card shows
-fixed-income invested principal. The "Valor atual" summary adds invested
-principal in fixed income and FIIs to the manually entered investment-account
-cash balance. The "Resultado" summary separately totals estimated fixed-income
-net gains and FII price changes. Cash distributions are shown separately. The
-Result breakdown lists each asset's contribution to that total. It also lists the invested principal in active
-daily-liquidity positions and the maturity dates and projected net values of
-active positions redeemable only at maturity. A missing IPCA or Selic reference leaves
-that projected value pending. Future applications and missing application dates are excluded.
-If a fixed-income position has no IPCA or Selic estimate, the combined current value is
-marked pending instead of showing a partial total.
+fixed-income invested principal. The "Valor atual" summary adds each fixed-income
+position's typed-in `current_value` (its invested principal when not set, never the
+estimate), the FIIs at market value (quantity × quote, quantity × average price
+without a quote) and the manually entered investment-account cash balance; it never
+depends on the IPCA/Selic estimates, so it is never pending. "Valor aplicado" is the
+fixed-income principal plus the FII cost. The "Resultado" summary totals, per
+fixed-income position, `current_value - amount` when the current value is set and
+the estimated net gain otherwise, plus the FII price changes. Cash distributions are
+shown separately. The Result breakdown lists each asset's contribution to that total,
+in the order the Renda fixa and FIIs pages were last sorted by. It also lists the
+invested principal in active daily-liquidity positions and the maturity dates and
+projected net values of active positions redeemable only at maturity. A missing IPCA
+or Selic reference leaves that projected value pending. Future applications and
+missing application dates are excluded. If a position without `current_value` lacks
+its IPCA or Selic estimate, "Resultado" is marked pending instead of showing a
+partial total.
 
 **Renda fixa** (`/pf`) is the real carteira of fixed-income titles actually
 bought. Each record carries `amount` (valor aplicado), `applied_at` and
 `broker` ("XP"). The card leads with the **invested principal** and shows the
-application date and contracted rate below it. The maturity value is labeled as
+application date, the typed-in "Valor atual" (only when set) and contracted rate below it. The maturity value is labeled as
 an estimate, with the applicable IR bracket. The portfolio subtitle shows the total invested principal. Every input field
 of a title lives inside its modal; only the optional **estimated IPCA** and
 **estimated Selic** references are editable there, each when its indexer is selected.
@@ -187,10 +197,14 @@ bracket. A Tesouro card adds one line with the estimated custódia to date. It d
 ganho líquido in reais nor the **% líquido do CDI**: both read as `0` on a position
 applied today, which is exactly when the card is looked at.
 
-Investimentos still **sorts** by that % líquido do CDI (`netCdiPct`): real positions
-have different sizes, so ordering by reais would just crown the biggest application,
-and the tax-adjusted ratio compares positions against the same CDI reference. The
-order is the whole statement, there is no "melhor" badge on a card.
+Investimentos **sorts** by application date, oldest first, with positions without
+`applied_at` last (ties by name). An "Ordenar" selector in the header switches to
+name (A-Z, pt-BR collation); FIIs offers the same selector, sorting by the record's
+`created` date ("Data de cadastro", no schema field for a purchase date) or by ticker.
+Each page remembers its choice in localStorage (`lib/useSortPref.ts`, keys
+`sort:renda-fixa` and `sort:fiis`). A backup overwrite import recreates the FII
+records, so their `created` becomes the import time. The % líquido do CDI is still
+computed in `yieldFor` but neither shown nor used for ordering.
 
 The engine is `frontend/src/lib/invest.ts`, pure and free of React/IO. It runs in
 the browser rather than in Go because rate changes recompute the whole carteira on every
@@ -219,7 +233,7 @@ a gross/net/IR breakdown out. Rules:
   custódia sai do rendimento antes do IR (IR sobre ganho bruto - custódia) e do
   valor líquido; `yieldFor` a expõe em `custody`.
 - **% líquido do CDI** = ganho líquido ÷ ganho de um título a 100% do CDI no mesmo
-  prazo. Não é exibido; serve para ranquear posições de tamanhos diferentes.
+  prazo. Não é exibido nem ordena a carteira (que segue a data da aplicação).
 - **Um título vencido para de render:** a contagem de dias trava no vencimento, e o
   card ganha o badge "Vencido".
 - **Liquidez no vencimento:** o valor de hoje é uma estimativa contábil, não um
@@ -238,7 +252,7 @@ possible future feature; this version keeps both inputs manual.
 
 UI text on the PF side is deliberately terse: labels of at most 5 words, one badge
 per fact. No tooltips, no educational paragraphs. Percentages go through `pct()` in
-`lib/pb.ts` so they read in pt-BR ("88,3", not "88.3").
+`lib/pb.ts` so they follow the number format preference ("88,3" by default).
 
 ## Domain rules (important)
 
@@ -380,4 +394,22 @@ per fact. No tooltips, no educational paragraphs. Percentages go through `pct()`
   effective-rate line as a reference rule instead of a card of its own. Hues are stepped per theme (not flipped)
   and were validated for colorblind separation and contrast against the card surfaces,
   so add a series by taking the next slot, never by inventing a hue.
+- **Number format** is one app-wide preference (Config → Preferências → "Formato
+  numérico"): "1.099,55" (default) or "1,099.55". It lives in `lib/numberFormat.ts`
+  (localStorage `number_format`) and only changes separators; symbols stay per currency
+  (R$, $). Every displayed number goes through `num()`, `brl()`, `usd()`, `pct()` or
+  `quote()` (4-decimal FX rates) from `lib/pb.ts`, never `toFixed`/`toLocaleString`
+  directly. Changing it remounts the page (`<Outlet key>` in `Layout`). Display and input
+  only: what is sent to PocketBase, backups, CSV and webhooks stay plain numbers.
+- **Money inputs** use `MoneyInput` (`components/ui.tsx`, helpers in `lib/money.ts`): a
+  cents-first mask where typed digits fill from the right ("1099" -> "10,99", or "10.99"
+  in the "1,099.55" format), an empty field stays empty, and the form state keeps the
+  canonical `String(n)`, never the formatted text. Typing "0" into an empty field is a
+  real zero ("0,00"); deleting the last significant digit empties it. Focus selects the
+  whole value, so typing replaces it. A paste is read as a decimal number and replaces
+  the value (`parsePastedMoney`: "250" -> 250, "1,234.5" -> 1234.5; a lone separator
+  followed by exactly 3 digits is a thousands one, "1.099" -> 1099). Backspace/Delete
+  next to a separator removes the neighbouring digit. The placeholder defaults to the
+  formatted zero. Rates, quantities and days stay native
+  `type="number"` inputs.
 - No em dashes in written output.

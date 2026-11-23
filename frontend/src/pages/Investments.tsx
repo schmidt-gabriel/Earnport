@@ -13,7 +13,8 @@ import {
   type InvestKind,
 } from "../lib/invest";
 import { NoInvestments, PositionCard, useRates } from "../components/invest";
-import { Button, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Field, Input, Modal, MoneyInput, Select, SortSelect } from "../components/ui";
+import { useSortPref } from "../lib/useSortPref";
 
 const empty = {
   name: "",
@@ -22,6 +23,7 @@ const empty = {
   indexer: "cdi",
   rate_pct: "100",
   amount: "",
+  current_value: "",
   applied_at: "",
   liquidity: "maturity",
   maturity: "",
@@ -58,6 +60,7 @@ export default function Investments() {
   // stops applying the kind's default liquidity.
   const [liquidityTouched, setLiquidityTouched] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [sort, setSort] = useSortPref("renda-fixa");
 
   // The sidebar "+" links here with ?new=1, so react to the query string.
   useEffect(() => {
@@ -85,6 +88,7 @@ export default function Investments() {
       indexer: indexerOf(inv),
       rate_pct: String(contractedRateOf(inv)),
       amount: inv.amount ? String(inv.amount) : "",
+      current_value: inv.current_value ? String(inv.current_value) : "",
       applied_at: toDateInput(inv.applied_at),
       liquidity: inv.liquidity ?? "maturity",
       maturity: toDateInput(inv.maturity),
@@ -130,6 +134,8 @@ export default function Investments() {
       // Retained only for importing old backups that still contain cdi_pct.
       cdi_pct: form.indexer === "cdi" ? Number(form.rate_pct) : 0,
       amount: form.amount ? Number(form.amount) : 0,
+      // Empty is stored as 0, which reads as "not set".
+      current_value: form.current_value ? Number(form.current_value) : 0,
       applied_at: form.applied_at ? fromDateInput(form.applied_at) : "",
       liquidity: form.liquidity,
       maturity: form.maturity ? fromDateInput(form.maturity) : "",
@@ -145,7 +151,7 @@ export default function Investments() {
     setOpen(false);
   }
 
-  const carteira = positions(list.data ?? [], rates);
+  const carteira = positions(list.data ?? [], rates, undefined, sort);
   const total = portfolioTotals(carteira);
   // Corretoras já usadas, para sugerir no formulário.
   const brokers = [
@@ -162,7 +168,10 @@ export default function Investments() {
             {brl(total.amount)} aplicados
           </p>
         </div>
-        <Button onClick={openNew}>+ Adicionar</Button>
+        <div className="flex items-center gap-3">
+          <SortSelect value={sort} onChange={setSort} dateLabel="Data de aplicação" />
+          <Button onClick={openNew}>+ Adicionar</Button>
+        </div>
       </div>
 
       {carteira.length === 0 ? (
@@ -270,13 +279,17 @@ export default function Investments() {
               </Field>
             )}
             <Field label="Valor aplicado (R$)">
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
+              <MoneyInput
                 required
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(n) => setForm({ ...form, amount: n === null ? "" : String(n) })}
+              />
+            </Field>
+            <Field label="Valor atual (R$)">
+              <MoneyInput
+                placeholder="Opcional"
+                value={form.current_value}
+                onChange={(n) => setForm({ ...form, current_value: n === null ? "" : String(n) })}
               />
             </Field>
             <Field label="Data da aplicação">

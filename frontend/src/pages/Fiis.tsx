@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useCollection } from "../lib/useCollection";
-import { brl, fmtDate, fromDateInput, pct, toDateInput } from "../lib/pb";
+import { brl, fmtDate, fromDateInput, num, pct, toDateInput } from "../lib/pb";
 import type { Investment } from "../lib/invest";
 import {
   fiiTotals,
@@ -10,10 +10,12 @@ import {
   holdingChangePct,
   holdingCost,
   holdingValue,
+  sortFiis,
   type FiiDividend,
   type FiiHolding,
 } from "../lib/fiis";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select, SortSelect } from "../components/ui";
+import { useSortPref } from "../lib/useSortPref";
 
 const emptyFii = {
   ticker: "",
@@ -58,7 +60,8 @@ export default function Fiis() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const fiis = holdings.list.data ?? [];
+  const [sort, setSort] = useSortPref("fiis");
+  const fiis = sortFiis(holdings.list.data ?? [], sort);
   const brokers = [...new Set(
     [...fiis, ...(investments.list.data ?? [])]
       .map((item) => item.broker?.trim())
@@ -177,7 +180,8 @@ export default function Fiis() {
             Renda variável · cotações e proventos manuais
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <SortSelect value={sort} onChange={setSort} dateLabel="Data de cadastro" />
           <Button variant="ghost" disabled={fiis.length === 0} onClick={() => openNewDividend()}>
             + Provento
           </Button>
@@ -217,7 +221,7 @@ export default function Fiis() {
               </div>
               <p className="mt-4 text-2xl font-semibold tabular-nums">{brl(holdingValue(fii))}</p>
               <p className="mt-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-                {fii.quantity} cotas · {brl(fii.current_price)} por cota
+                {num(fii.quantity)} cotas · {brl(fii.current_price)} por cota
                 {fii.quoted_at && ` · ${fmtDate(fii.quoted_at)}`}
               </p>
               <div className="mt-3 space-y-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
@@ -296,12 +300,12 @@ export default function Fiis() {
                 onChange={(e) => setFiiForm({ ...fiiForm, quantity: e.target.value })} />
             </Field>
             <Field label="Preço médio (R$)">
-              <Input required type="number" min={0.01} step="0.01" value={fiiForm.average_price}
-                onChange={(e) => setFiiForm({ ...fiiForm, average_price: e.target.value })} />
+              <MoneyInput required value={fiiForm.average_price}
+                onChange={(n) => setFiiForm({ ...fiiForm, average_price: n === null ? "" : String(n) })} />
             </Field>
             <Field label="Cotação atual (R$)">
-              <Input required type="number" min={0.01} step="0.01" value={fiiForm.current_price}
-                onChange={(e) => setFiiForm({ ...fiiForm, current_price: e.target.value })} />
+              <MoneyInput required value={fiiForm.current_price}
+                onChange={(n) => setFiiForm({ ...fiiForm, current_price: n === null ? "" : String(n) })} />
             </Field>
             <Field label="Data da cotação">
               <Input type="date" value={fiiForm.quoted_at}
@@ -334,8 +338,8 @@ export default function Fiis() {
                 onChange={(e) => setDividendForm({ ...dividendForm, payment_date: e.target.value })} />
             </Field>
             <Field label="Valor recebido (R$)">
-              <Input required type="number" min={0.01} step="0.01" value={dividendForm.amount}
-                onChange={(e) => setDividendForm({ ...dividendForm, amount: e.target.value })} />
+              <MoneyInput required value={dividendForm.amount}
+                onChange={(n) => setDividendForm({ ...dividendForm, amount: n === null ? "" : String(n) })} />
             </Field>
             <Field label="Notas">
               <Input maxLength={500} value={dividendForm.notes}

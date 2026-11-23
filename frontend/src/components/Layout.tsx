@@ -5,6 +5,7 @@ import { useCollection } from "../lib/useCollection";
 import { MONTHS, useYear, yearOptions } from "../lib/year";
 import { applyTheme, getInitialTheme, type Theme } from "../lib/theme";
 import { modeHome, modeOf, saveMode, type Mode } from "../lib/mode";
+import { useNumberFormat } from "../lib/useNumberFormat";
 
 // Pages driven by the sidebar month filter, separated from the annual ones.
 const navMonthly = [
@@ -136,6 +137,10 @@ function ThemeToggle() {
 
 export default function Layout() {
   const { year, setYear, month, setMonth } = useYear();
+  // The formatters read the number format preference directly, so a change
+  // remounts the page (keyed below) to re-render every number at once. The
+  // query cache, the sidebar and the year/month filter survive it.
+  const numberFormat = useNumberFormat();
   // Which side of the app is on screen. Derived from the route, and remembered
   // so a reload lands on the same side.
   const mode = modeOf(useLocation().pathname);
@@ -256,7 +261,7 @@ export default function Layout() {
         </aside>
 
         <main className="flex-1 p-8">
-          <Outlet />
+          <Outlet key={numberFormat} />
         </main>
       </div>
     </div>

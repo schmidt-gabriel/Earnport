@@ -4,8 +4,8 @@ import { useCollection } from "../lib/useCollection";
 import { useYear } from "../lib/year";
 import type { ProfitDistribution } from "../lib/types";
 import { IRRF_MONTHLY_LIMIT, IRRF_START_YEAR, suggestedIrrf } from "../lib/types";
-import { brl, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
-import { Button, Card, Field, Input, Modal } from "../components/ui";
+import { brl, fmtDate, num, toDateInput, fromDateInput } from "../lib/pb";
+import { Button, Card, Field, Input, Modal, MoneyInput } from "../components/ui";
 
 const ANNUAL_LIMIT = 600000; // yearly quota; above it the IRRF stops being refundable
 const yearOf = (d: string) => d.slice(0, 4);
@@ -268,7 +268,7 @@ export default function ProfitDistributions() {
       </Card>
 
       <p className="text-xs text-neutral-400 dark:text-neutral-500">
-        A cota restante é derivada (R$ {IRRF_MONTHLY_LIMIT.toLocaleString("pt-BR")} − total do mês).
+        A cota restante é derivada (R$ {num(IRRF_MONTHLY_LIMIT)} − total do mês).
         Quando fica negativa, o mês excede R$50k e há retenção de 10% sobre o mês inteiro
         (restituível no IRPF se o ano ficar abaixo de R$600k). O <strong>IRRF retido</strong> é
         calculado pela regra, nunca digitado: cada registro carrega a sua parte do mês, e
@@ -291,12 +291,10 @@ export default function ProfitDistributions() {
               />
             </Field>
             <Field label="Valor (BRL)">
-              <Input
-                type="number"
-                step="0.01"
+              <MoneyInput
                 required
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(n) => setForm({ ...form, amount: n === null ? "" : String(n) })}
               />
             </Field>
             {/* Derivado, nunca digitado: a retenção é 10% do mês inteiro e cada

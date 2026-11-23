@@ -12,7 +12,7 @@ import {
   paymentLabel,
 } from "../lib/types";
 import { brl, usd, fmtDate, toDateInput, fromDateInput } from "../lib/pb";
-import { Button, Card, Field, Input, Modal, Select } from "../components/ui";
+import { Button, Card, Field, Input, Modal, MoneyInput, Select } from "../components/ui";
 
 const empty = {
   date: "",
@@ -365,12 +365,10 @@ export default function Expenses() {
               </Select>
             </Field>
             <Field label={`Valor (${form.currency === "USD" ? "USD" : "BRL"})`}>
-              <Input
-                type="number"
-                step="0.01"
+              <MoneyInput
                 required
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(n) => setForm({ ...form, amount: n === null ? "" : String(n) })}
               />
             </Field>
             <Field label="Observação">
